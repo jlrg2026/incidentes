@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incidentes DERMAVAN</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#e6eef2;--s:#fff;--s2:#f1f6f8;--ink:#0d2a35;--mut:#58717c;--line:#d1dee4;--ac:#00748f;--aci:#fff;
+--sh:0 1px 2px rgba(0,60,80,.07),0 8px 24px rgba(0,60,80,.08);--Alta:#d6234a;--Media:#d99a00;--Baja:#2e9e6b;
+--hero:linear-gradient(135deg,#d6f1ee,#fff0cf);--head:'Bricolage Grotesque','Trebuchet MS',sans-serif;--body:'DM Sans',system-ui,sans-serif}
+:root[data-theme=dark]{--bg:#06141b;--s:#0f232d;--s2:#0a1b23;--ink:#e6f2f6;--mut:#8fa9b5;--line:#1f3844;--ac:#38d6c4;--aci:#06141b;
+--sh:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);--Alta:#ff5c7f;--Media:#f2bd3a;--Baja:#4cc995;--hero:linear-gradient(135deg,#0c3340,#26213f)}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body);transition:background .4s,color .4s}
+h1,h2,h3{font-family:var(--head);margin:0;line-height:1.15}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.65rem clamp(1rem,3vw,2rem);background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{font:800 1.2rem var(--head);display:flex;align-items:center;gap:.5rem;margin-right:.5rem}
+.brand i{width:28px;height:20px;background:var(--ac);border-radius:4px;position:relative}
+.brand i::before,.brand i::after{content:"";position:absolute;top:6px;width:8px;height:8px;border-radius:50%;background:var(--bg)}
+.brand i::before{left:-4px}.brand i::after{right:-4px}
+nav{display:flex;gap:.3rem;margin-right:auto;flex-wrap:wrap}
+nav button{border:0;background:none;padding:.45rem .9rem;border-radius:999px;cursor:pointer;font-weight:500;color:var(--mut)}
+nav button[aria-current=true]{background:var(--ac);color:var(--aci);font-weight:700}
+.btn{border:1px solid var(--line);background:var(--s);border-radius:999px;padding:.5rem 1rem;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;transition:transform .15s,border-color .15s;text-decoration:none}
+.btn:hover{border-color:var(--ac)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.6;cursor:wait}
+.btn.pr{background:var(--ac);color:var(--aci);border-color:transparent;font-weight:700}
+.btn.dn{color:var(--Alta)}.btn.sm{padding:.25rem .7rem;font-size:.82rem}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:700 .75rem var(--head);color:#fff;flex:none}
+.live{font-size:.78rem;color:var(--mut);display:flex;gap:.4rem;align-items:center;cursor:pointer;background:none;border:0}.live b{width:8px;height:8px;border-radius:50%;background:var(--Baja);animation:p 2s infinite}
+@keyframes p{50%{opacity:.3}}
+main{max-width:1280px;margin:0 auto;padding:1.2rem clamp(1rem,3vw,2rem) 4rem}
+.card{background:var(--s);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);padding:1rem 1.2rem}
+label{display:block;font-weight:500;font-size:.82rem;margin:.8rem 0 .25rem}
+input,select,textarea{width:100%;background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:.58rem .8rem}
+textarea{min-height:96px;resize:vertical}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:.8rem;margin-bottom:1rem}
+.kpi{background:var(--hero);padding:.9rem 1.1rem}.kpi b{font:800 2rem var(--head);display:block}.kpi span{font-size:.8rem;color:var(--mut)}
+.kpi.warn b{color:var(--Alta)}
+.bar{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;align-items:end}
+.bar>div{flex:1 1 120px}.bar label{margin:0 0 .2rem;font-size:.74rem;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:1rem;margin-bottom:1rem}
+.grid h3,.qh h3{font-size:1rem;margin-bottom:.7rem}
+.leg{display:grid;gap:.25rem;font-size:.85rem}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:.4rem}
+.dnt{display:flex;align-items:center;gap:1rem}
+.hb{display:grid;grid-template-columns:120px 1fr 24px;gap:.5rem;align-items:center;font-size:.82rem;margin:.3rem 0}
+.hb div{height:10px;background:var(--s2);border-radius:6px;overflow:hidden}.hb div i{display:block;height:100%;background:var(--ac);border-radius:6px}
+.hb span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q{display:grid;gap:.5rem}
+.qi{display:grid;grid-template-columns:auto 1fr auto;gap:.8rem;align-items:center;padding:.6rem .8rem;border:1px solid var(--line);border-left:6px solid var(--pc,var(--Media));border-radius:12px;background:var(--s2)}
+.qi.Alta{--pc:var(--Alta)}.qi.Baja{--pc:var(--Baja)}.qi b{font:800 .9rem var(--head)}.qi small{display:block;color:var(--mut)}
+@media(max-width:560px){.qi{grid-template-columns:1fr}}
+.list{display:grid;gap:.8rem}
+.tk{--pc:var(--Media);display:grid;grid-template-columns:116px 1fr auto;background:var(--s);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);cursor:pointer;text-align:left;width:100%;padding:0;overflow:hidden;transition:transform .15s,border-color .15s}
+.tk:hover{transform:translateY(-2px);border-color:var(--pc)}.tk.Alta{--pc:var(--Alta)}.tk.Baja{--pc:var(--Baja)}
+.stub{border-right:2px dashed var(--line);border-left:6px solid var(--pc);padding:.8rem .4rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.2rem;position:relative}
+.stub::before,.stub::after{content:"";position:absolute;right:-8px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:1px solid var(--line)}
+.stub::before{top:-8px}.stub::after{bottom:-8px}
+.stub b{font:800 .85rem var(--head)}.stub span{font-size:.75rem;font-weight:700;color:var(--pc)}
+.body{padding:.8rem 1rem;min-width:0}.tk h3{font-size:1.02rem}
+.tk p{margin:.2rem 0 .5rem;color:var(--mut);font-size:.88rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{display:flex;align-items:center;gap:.45rem;font-size:.78rem;color:var(--mut);flex-wrap:wrap}.meta .av{width:22px;height:22px;font-size:.62rem}
+.st{margin:.8rem;display:grid;gap:.3rem;justify-items:end;align-self:start}
+.tag{padding:.16rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700;border:1px solid currentColor;white-space:nowrap}
+.t-p{color:var(--ac)}.t-c{color:var(--Baja)}.t-v{color:var(--Alta)}.t-m{color:var(--mut)}
+@media(max-width:560px){.tk{grid-template-columns:84px 1fr}.st{grid-column:1/-1;justify-items:start;margin:0 1rem .8rem}}
+.empty{text-align:center;padding:2.2rem 1rem;color:var(--mut);border:2px dashed var(--line);border-radius:14px}
+.sub{color:var(--mut);font-size:.86rem;margin:.2rem 0}
+.ug{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:1rem;align-items:start}@media(max-width:900px){.ug{grid-template-columns:1fr}}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;color:var(--mut);font-weight:500;padding:.5rem;border-bottom:1px solid var(--line)}td{padding:.55rem .5rem;border-bottom:1px solid var(--line);vertical-align:middle}
+td select{width:auto;padding:.3rem .5rem}.uc{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.lg{min-height:100vh;display:grid;place-items:center;padding:1rem;background:var(--hero)}
+.lg .card{width:min(420px,100%);padding:1.6rem}.lg h1{font-size:1.7rem;margin:.4rem 0}
+.lg .btn.w{width:100%;justify-content:center;margin-top:1rem;padding:.75rem}
+.lk{background:none;border:0;color:var(--ac);cursor:pointer;padding:.3rem 0;font-size:.85rem;text-decoration:underline}
+dialog{border:1px solid var(--line);border-radius:18px;background:var(--s);color:var(--ink);padding:0;width:min(600px,94vw);box-shadow:0 20px 60px rgba(0,0,0,.4)}
+dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
+.dlg{padding:1.4rem}.dlg h2{font-size:1.3rem;margin-bottom:.4rem}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem}
+.seg button{border:1px solid var(--line);background:var(--s2);border-radius:10px;padding:.5rem;cursor:pointer}
+.seg button[aria-pressed=true]{color:#fff;font-weight:700;border-color:transparent}
+.seg .Alta[aria-pressed=true]{background:var(--Alta)}.seg .Media[aria-pressed=true]{background:var(--Media);color:#241800}.seg .Baja[aria-pressed=true]{background:var(--Baja)}
+.log{list-style:none;padding:0;margin:.8rem 0 .8rem .5rem;display:grid;gap:.5rem;max-height:200px;overflow:auto;border-left:2px solid var(--line)}
+.log li{padding-left:.9rem;font-size:.86rem}.log small{display:block;color:var(--mut)}
+.acts{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,2rem);background:var(--ink);color:var(--bg);padding:.7rem 1.1rem;border-radius:999px;opacity:0;pointer-events:none;transition:.3s;z-index:30;max-width:92vw}.toast.on{opacity:1;transform:translate(-50%,0)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ============ CONEXIÓN (solo si falta la URL del servidor) ============ -->
+<div class="lg" id="conn" hidden><div class="card">
+  <div class="brand"><i></i>Incidentes DERMAVAN</div>
+  <h1>Conecta tu Google Sheet</h1>
+  <p class="sub">Pega la URL de la aplicación web de Apps Script (termina en <b>/exec</b>). También puedes dejarla fija en la constante <b>API_URL</b> del archivo.</p>
+  <label for="cu">URL del servidor</label><input id="cu" placeholder="https://script.google.com/macros/s/…/exec">
+  <button class="btn pr w" id="cb">Guardar y continuar</button>
+</div></div>
+
+<!-- ============ LOGIN ============ -->
+<div class="lg" id="login" hidden><div class="card">
+  <div class="brand"><i></i>Incidentes DERMAVAN</div>
+  <h1 id="lt">Inicia sesión</h1>
+  <p class="sub" id="ls">Usa el correo y la contraseña que te dio el administrador.</p>
+  <form id="lf">
+    <div id="ln" hidden><label for="lnm">Nombre completo</label><input id="lnm" autocomplete="name"></div>
+    <label for="le">Correo</label><input id="le" type="email" autocomplete="username" required>
+    <label for="lp">Contraseña</label><input id="lp" type="password" autocomplete="current-password" minlength="6" required>
+    <button class="btn pr w" id="lb">Entrar</button>
+  </form>
+  <button class="lk" id="ls2">Primer acceso: crear administrador</button>
+  <div style="margin-top:.8rem"><button class="btn" id="lth" type="button"></button></div>
+</div></div>
+
+<!-- ============ APP ============ -->
+<div id="app" hidden>
+<header class="top">
+  <div class="brand"><i></i>Incidentes DERMAVAN</div>
+  <nav id="nav"></nav>
+  <button class="live" id="live" title="Actualizar ahora"><b></b><span id="lv">En vivo</span></button>
+  <button class="btn pr" id="new">+ Nuevo incidente</button>
+  <a class="btn" id="gs" target="_blank" rel="noopener" hidden>📄 Google Sheet</a>
+  <button class="btn" id="th"></button>
+  <span class="uc" id="who"></span>
+  <button class="btn sm" id="pw">Clave</button>
+  <button class="btn" id="out">Salir</button>
+</header>
+
+<main id="bars">
+  <div class="bar">
+    <div><label for="d1">Desde</label><input type="date" id="d1"></div>
+    <div><label for="d2">Hasta</label><input type="date" id="d2"></div>
+    <div><label for="fsis">Sistema</label><select id="fsis"></select></div>
+    <div><label for="fsev">Severidad</label><select id="fsev"><option value="">Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
+    <div><label for="fst">Estado</label><select id="fst"><option value="">Todos</option><option>En proceso</option><option>Cerrado</option></select></div>
+    <div class="adm"><label for="fas">Atención</label><select id="fas"><option value="">Todos</option><option value="none">Sin asignar</option><option value="me">Asignados a mí</option></select></div>
+    <div style="flex:2 1 170px"><label for="q">Buscar</label><input id="q" type="search" placeholder="Folio, texto o persona"></div>
+    <button class="btn" id="clr">Limpiar</button>
+    <button class="btn pr" id="xls">Exportar Excel</button>
+  </div>
+</main>
+
+<main id="v-ctl" style="padding-top:0" hidden>
+  <div class="kpis" id="kpis"></div>
+  <div class="card" style="margin-bottom:1rem"><div class="qh"><h3>Cola de atención · todos los abiertos, los más urgentes primero</h3></div><div class="q" id="queue"></div></div>
+  <div class="grid" id="dash"></div>
+</main>
+
+<main id="v-inc" style="padding-top:0" hidden><div class="list" id="list"></div></main>
+
+<main id="v-usr" hidden>
+  <div class="ug">
+    <div class="card"><h2>Alta de usuario</h2><p class="sub">Define su acceso con una contraseña temporal. Quien tenga acceso aquí puede entrar a este sitio; la baja lo bloquea de inmediato.</p>
+      <label for="un">Nombre completo</label><input id="un">
+      <label for="ue">Correo</label><input id="ue" type="email">
+      <label for="up">Contraseña temporal</label><input id="up" type="text" placeholder="Mínimo 6 caracteres">
+      <label for="ur">Rol</label><select id="ur"><option value="usuario">Usuario (reporta incidentes)</option><option value="admin">Administrador (atiende y gestiona)</option></select>
+      <button class="btn pr" id="ua" style="width:100%;justify-content:center;margin-top:1rem">Dar de alta</button></div>
+    <div class="card tw"><h2 id="uh">Usuarios</h2><table><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Incidentes</th><th></th></tr></thead><tbody id="ut"></tbody></table></div>
+  </div>
+</main>
+</div>
+
+<dialog id="dN"><div class="dlg"><h2>Nuevo incidente</h2>
+  <label for="sys">Sistema</label><select id="sys"></select>
+  <label>Severidad</label><div class="seg" id="sv"></div>
+  <label for="dsc">Descripción</label><textarea id="dsc" placeholder="¿Qué pasó, desde cuándo y a quién afecta?"></textarea>
+  <div class="acts"><button class="btn" data-close>Cancelar</button><button class="btn pr" id="cr">Crear incidente</button></div></div></dialog>
+<dialog id="dT"><div class="dlg" id="tb"></div></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ===== CONFIGURACIÓN: pega aquí la URL de tu Apps Script (termina en /exec) ===== */
+const API_URL='https://script.google.com/macros/s/AKfycbxN3mxyfj-ldkgNQog2669QEgtXWp1ldhFzmEXWbx5jmai7gR-UssyiE2ngB7vZCkaaOw/exec';
+/* ================================================================================ */
+
+const SIS=['Biométrico','BlackList','CallCenter','Correo Electrónico','Enlaces','Gestión de Licencias','Impresoras','Ipad','Iphone','Laptop','Páginas WEB','POPL','Red / Infraestructura','Servidores Cloud MOODLE','Servidores Cloud SAP','Otros'];
+const SLA={Alta:4,Media:24,Baja:72},RANK={Alta:0,Media:1,Baja:2}; // horas objetivo de resolución
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=t=>new Date(t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFixed(1)+' h':(h/24).toFixed(1)+' d'};
+const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
+let API=API_URL||ls.get('inc_api')||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
+try{SS=JSON.parse(ls.get('inc_s'))}catch{}
+const isA=()=>P?.rol==='admin';
+
+/* ---------- Tema día/noche ---------- */
+function theme(){const h=new Date().getHours();document.documentElement.dataset.theme=mode==='auto'?(h>=7&&h<19?'light':'dark'):mode==='day'?'light':'dark';
+  $('#th').textContent=$('#lth').textContent=mode==='auto'?'🌗 Auto':mode==='day'?'☀️ Día':'🌙 Noche'}
+$('#th').onclick=$('#lth').onclick=()=>{mode={auto:'day',day:'night',night:'auto'}[mode];ls.set('inc_theme',mode);theme()};
+setInterval(theme,60000);theme();
+
+/* ---------- Comunicación con Google Sheets (Apps Script) ---------- */
+async function api(a,d={}){
+  let j;try{const r=await fetch(API,{method:'POST',body:JSON.stringify({a,t:SS?.t,...d})});j=await r.json()}
+  catch{throw new Error('No hay conexión con el servidor. Revisa la URL y que la implementación sea para «Cualquier persona».')}
+  if(!j.ok){if(j.error==='SESION'){logout();throw new Error('Tu sesión expiró. Entra de nuevo.')}throw new Error(j.error)}return j}
+const run=async(btn,f)=>{if(btn)btn.disabled=true;try{await f()}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}};
+
+/* ---------- Acceso ---------- */
+$('#cb').onclick=()=>{const u=$('#cu').value.trim();if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(u)){toast('Pega la URL completa que termina en /exec');return}API=u;ls.set('inc_api',u);init()};
+let setup=false;
+$('#ls2').onclick=()=>{setup=!setup;$('#ln').hidden=!setup;$('#lt').textContent=setup?'Crear administrador':'Inicia sesión';$('#ls').textContent=setup?'Solo funciona una vez, cuando aún no existe ningún usuario en la hoja.':'Usa el correo y la contraseña que te dio el administrador.';$('#lb').textContent=setup?'Crear y entrar':'Entrar';$('#ls2').textContent=setup?'Volver a iniciar sesión':'Primer acceso: crear administrador'};
+$('#lf').onsubmit=e=>{e.preventDefault();run($('#lb'),async()=>{
+  const j=await api(setup?'setup':'login',{email:$('#le').value,pass:$('#lp').value,nombre:$('#lnm').value});
+  SS={t:j.t,u:j.user};ls.set('inc_s',JSON.stringify(SS));$('#lp').value='';await start()})};
+function logout(){SS=null;ls.del('inc_s');clearInterval(timer);P=null;data=[];users=[];$('#app').hidden=true;$('#login').hidden=false;document.querySelectorAll('dialog[open]').forEach(d=>d.close())}
+$('#out').onclick=logout;
+$('#pw').onclick=()=>run(null,async()=>{const o=prompt('Contraseña actual:');if(!o)return;const n=prompt('Contraseña nueva (mínimo 6 caracteres):');if(!n)return;await api('cpass',{old:o,new:n});toast('Contraseña actualizada')});
+
+async function init(){
+  $('#conn').hidden=true;$('#login').hidden=true;
+  if(!API){$('#conn').hidden=false;return}
+  if(SS){try{await start();return}catch{}}
+  $('#login').hidden=false}
+async function start(){
+  P=SS.u;await refresh();
+  $('#login').hidden=true;$('#app').hidden=false;
+  $('#who').innerHTML=`${av(P.nombre)}<span><b>${esc(P.nombre)}</b><br><small style="color:var(--mut)">${isA()?'Administrador':'Usuario'}</small></span>`;
+  document.querySelectorAll('.adm').forEach(e=>e.hidden=!isA());
+  const tabs=isA()?[['ctl','Centro de control'],['inc','Incidentes'],['usr','Usuarios']]:[['inc','Mis incidentes']];
+  $('#nav').innerHTML=tabs.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('');
+  $('#fsis').innerHTML='<option value="">Todos</option>'+SIS.map(s=>`<option>${s}</option>`).join('');
+  $('#sys').innerHTML='<option value="">Seleccione sistema</option>'+SIS.map(s=>`<option>${s}</option>`).join('');
+  go(isA()?'ctl':'inc');
+  clearInterval(timer);timer=setInterval(()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))refresh().catch(()=>{})},20000)}
+async function refresh(){
+  const j=await api('list');data=j.inc;users=j.users||[];P=j.me;SS.u=j.me;
+  if(j.sheet){$('#gs').href=j.sheet;$('#gs').hidden=false}
+  $('#lv').textContent='Actualizado '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  if(!$('#app').hidden){render();renderUsers()}}
+$('#live').onclick=()=>run(null,async()=>{await refresh();toast('Datos actualizados')});
+function go(v){view=v;document.querySelectorAll('#nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===v));
+  ['ctl','inc','usr'].forEach(k=>$('#v-'+k).hidden=k!==v);$('#bars').hidden=v==='usr';render()}
+$('#nav').onclick=e=>{const b=e.target.closest('[data-v]');if(b)go(b.dataset.v)};
+
+/* ---------- Filtros ---------- */
+const FI=['d1','d2','fsis','fsev','fst','fas','q'];
+FI.forEach(i=>$('#'+i).oninput=render);
+$('#clr').onclick=()=>{FI.forEach(i=>$('#'+i).value='');render()};
+function rows(){
+  const a=$('#d1').value?new Date($('#d1').value+'T00:00:00').getTime():0,b=$('#d2').value?new Date($('#d2').value+'T23:59:59').getTime():Infinity,q=$('#q').value.toLowerCase(),as=$('#fas').value;
+  return data.filter(t=>t.creado>=a&&t.creado<=b&&(!$('#fsis').value||t.system===$('#fsis').value)&&(!$('#fsev').value||t.severity===$('#fsev').value)&&(!$('#fst').value||t.status===$('#fst').value)&&(!as||(as==='none'?!t.asignadoA:t.asignadoA===P.uid))&&(!q||(t.folio+t.description+(t.creadoPorNombre||'')+t.system).toLowerCase().includes(q)))}
+const vencido=t=>t.status!=='Cerrado'&&Date.now()-t.creado>SLA[t.severity]*36e5;
+const fuera=t=>t.cerrado&&t.cerrado-t.creado>SLA[t.severity]*36e5;
+
+/* ---------- Gráficas (SVG, respetan día/noche) ---------- */
+const COL={Alta:'var(--Alta)',Media:'var(--Media)',Baja:'var(--Baja)'};
+function donut(R){const C=2*Math.PI*46;let o=0;const sg=['Alta','Media','Baja'].map(s=>{const v=R.filter(t=>t.severity===s).length,l=R.length?v/R.length*C:0;const x=`<circle cx="60" cy="60" r="46" fill="none" stroke="${COL[s]}" stroke-width="16" stroke-dasharray="${l} ${C-l}" stroke-dashoffset="${-o}" transform="rotate(-90 60 60)"/>`;o+=l;return{x,s,v}});
+  return `<div class="dnt"><svg viewBox="0 0 120 120" width="130" role="img" aria-label="Por severidad"><circle cx="60" cy="60" r="46" fill="none" stroke="var(--s2)" stroke-width="16"/>${sg.map(a=>a.x).join('')}<text x="60" y="67" text-anchor="middle" font-size="24" font-weight="800" fill="currentColor" font-family="Bricolage Grotesque,sans-serif">${R.length}</text></svg><div class="leg">${sg.map(a=>`<span><i style="background:${COL[a.s]}"></i>${a.s}: <b>${a.v}</b></span>`).join('')}</div></div>`}
+function bars(m){const e=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,7),mx=e[0]?e[0][1]:1;return e.length?e.map(([k,v])=>`<div class="hb"><span title="${esc(k)}">${esc(k)}</span><div><i style="width:${v/mx*100}%"></i></div><span>${v}</span></div>`).join(''):'<p class="sub">Sin datos</p>'}
+function trend(R){const N=14,D=864e5,t0=new Date().setHours(0,0,0,0)-(N-1)*D,c=Array(N).fill(0),k=Array(N).fill(0);
+  R.forEach(t=>{const i=Math.floor((t.creado-t0)/D);if(i>=0&&i<N)c[i]++;if(t.cerrado){const j=Math.floor((t.cerrado-t0)/D);if(j>=0&&j<N)k[j]++}});
+  const mx=Math.max(1,...c,...k),W=300,H=100,p=a=>a.map((v,i)=>`${i*W/(N-1)},${H-6-v/mx*(H-16)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Tendencia 14 días"><polyline points="${p(c)}" fill="none" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/><polyline points="${p(k)}" fill="none" stroke="var(--Baja)" stroke-width="3" stroke-dasharray="5 4" stroke-linejoin="round"/></svg><div class="leg" style="grid-auto-flow:column;justify-content:start;gap:1rem"><span><i style="background:var(--ac)"></i>Creados</span><span><i style="background:var(--Baja)"></i>Cerrados</span></div>`}
+const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
+
+/* ---------- Render ---------- */
+function card(t){return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
+  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}</div></div>
+  <div class="st"><span class="tag ${t.status==='Cerrado'?'t-c':'t-p'}">${t.status}</span>${vencido(t)?'<span class="tag t-v">Fuera de SLA</span>':''}${t.status!=='Cerrado'&&!t.asignadoA&&isA()?'<span class="tag t-m">Sin asignar</span>':''}</div></button>`}
+function render(){
+  if(!P||$('#app').hidden)return;const R=rows();
+  if(view==='inc')$('#list').innerHTML=R.length?R.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes. Crea el primero con «Nuevo incidente».'}</div>`;
+  if(view==='ctl'){
+    const cl=R.filter(t=>t.status==='Cerrado'),pr=R.filter(t=>t.status!=='Cerrado'),ven=data.filter(vencido).length,sa=data.filter(t=>t.status!=='Cerrado'&&!t.asignadoA).length;
+    const mt=cl.length?dur(cl.reduce((a,t)=>a+t.cerrado-t.creado,0)/cl.length):'—',cum=cl.length?Math.round(cl.filter(t=>!fuera(t)).length/cl.length*100)+'%':'—';
+    $('#kpis').innerHTML=[['Total (filtro)',R.length,''],['En proceso',pr.length,''],['Cerrados',cl.length,''],['Sin asignar',sa,sa?'warn':''],['Fuera de SLA',ven,ven?'warn':''],['Cumplimiento SLA',cum,''],['Resolución media',mt,'']].map(([l,v,c])=>`<div class="card kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
+    const Q=data.filter(t=>t.status!=='Cerrado').sort((a,b)=>vencido(b)-vencido(a)||RANK[a.severity]-RANK[b.severity]||a.creado-b.creado).slice(0,8);
+    $('#queue').innerHTML=Q.length?Q.map(t=>{const left=SLA[t.severity]*36e5-(Date.now()-t.creado);return `<div class="qi ${t.severity}"><div><b>${esc(t.folio)}</b><small>${t.severity}</small></div>
+      <div><b style="font-family:var(--body);font-weight:700">${esc(t.system)}</b> · ${esc(t.creadoPorNombre||'Sin registro')}<small>${esc(t.description.slice(0,90))} · ${left<0?'<span style="color:var(--Alta);font-weight:700">vencido hace '+dur(-left)+'</span>':'quedan '+dur(left)} · ${t.asignadoNombre?'Atiende: '+esc(t.asignadoNombre):'Sin asignar'}</small></div>
+      <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. No hay incidentes abiertos. 🎉</div>';
+    $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas con más incidentes</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga de atención (abiertos)</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
+}
+const upd=async(id,p,close)=>{await api('upd',{id,...p});await refresh();toast('Guardado');close?$('#dT').close():openT(id)};
+document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true).catch(x=>{throw x}));return}
+  const b=e.target.closest('[data-t]');if(b)openT(b.dataset.t);
+  if(e.target.closest('[data-close]'))e.target.closest('dialog').close()});
+
+/* ---------- Alta de incidente ---------- */
+const drawSev=()=>$('#sv').innerHTML=['Alta','Media','Baja'].map(s=>`<button class="${s}" aria-pressed="${s===sev}" data-s="${s}">${s}</button>`).join('');
+$('#sv').onclick=e=>{const b=e.target.closest('[data-s]');if(b){sev=b.dataset.s;drawSev()}};
+$('#new').onclick=()=>{drawSev();$('#dN').showModal()};
+$('#cr').onclick=()=>{const s=$('#sys').value,d=$('#dsc').value.trim();if(!s||!d){toast('Completa sistema y descripción');return}
+  run($('#cr'),async()=>{const j=await api('add',{system:s,severity:sev,description:d});$('#dsc').value='';$('#sys').value='';$('#dN').close();await refresh();toast('Incidente '+j.folio+' creado')})};
+
+/* ---------- Detalle / atención ---------- */
+function openT(id){
+  const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
+  const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
+  $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
+  <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
+  <p class="sub">${cerr?'Resuelto en '+dur(t.cerrado-t.creado)+(fuera(t)?' (fuera de SLA)':' (dentro de SLA)'):'Abierto hace '+dur(Date.now()-t.creado)+' · objetivo '+SLA[t.severity]+' h'}</p>
+  <label for="ed">Descripción</label><textarea id="ed" style="min-height:70px">${esc(t.description)}</textarea>
+  ${A?`<label for="as">Asignado a</label><select id="as"><option value="">Sin asignar</option>${ops}</select>`:''}
+  <ul class="log">${t.bit.map(l=>`<li><b>${esc(l.por)}</b> ${esc(l.text)}<small>${fmt(l.at)}</small></li>`).join('')}</ul>
+  <label for="nc">Comentario</label><textarea id="nc" style="min-height:56px"></textarea>
+  <div class="acts"><button class="btn" data-close>Cerrar ventana</button><button class="btn" id="sv2">Guardar</button>${A?`<button class="btn pr" id="stt">${cerr?'Reabrir':'Cerrar incidente'}</button>`:''}</div>`;
+  $('#sv2').onclick=()=>{const p={},d=$('#ed').value.trim(),c=$('#nc').value.trim();
+    if(d&&d!==t.description)p.description=d;if(c)p.comentario=c;
+    if(A&&($('#as').value||'')!==(t.asignadoA||''))p.asignadoA=$('#as').value;
+    if(!Object.keys(p).length){toast('No hay cambios');return}run($('#sv2'),()=>upd(t.id,p))};
+  if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true));
+  if(!$('#dT').open)$('#dT').showModal()}
+
+/* ---------- Módulo de usuarios (solo administrador) ---------- */
+function renderUsers(){
+  if(!isA())return;const c=count(data,t=>t.creadoPor||'');
+  $('#uh').textContent=`Usuarios (${users.filter(u=>u.activo).length} activos de ${users.length})`;
+  $('#ut').innerHTML=[...users].sort((a,b)=>(b.activo-a.activo)||a.nombre.localeCompare(b.nombre)).map(u=>{const me=u.uid===P.uid;return `<tr style="${u.activo?'':'opacity:.55'}">
+    <td><div class="uc">${av(u.nombre)}<span><b>${esc(u.nombre)}</b>${me?' (tú)':''}<br><small style="color:var(--mut)">${esc(u.email)}</small></span></div></td>
+    <td><select data-rol="${u.uid}" ${me?'disabled':''}><option value="usuario" ${u.rol==='usuario'?'selected':''}>Usuario</option><option value="admin" ${u.rol==='admin'?'selected':''}>Administrador</option></select></td>
+    <td><span class="tag ${u.activo?'t-c':'t-m'}">${u.activo?'Activo':'Baja'}</span></td><td>${c[u.uid]||0}</td>
+    <td><div class="uc"><button class="btn sm" data-reset="${u.uid}">Nueva clave</button>${me?'':`<button class="btn sm ${u.activo?'dn':''}" data-baja="${u.uid}">${u.activo?'Dar de baja':'Reactivar'}</button>`}</div></td></tr>`}).join('')}
+$('#ut').onclick=e=>{const b=e.target.closest('[data-baja],[data-reset]');if(!b)return;run(null,async()=>{
+  if(b.dataset.reset){const u=users.find(x=>x.uid===b.dataset.reset),n=prompt('Nueva contraseña temporal para '+u.nombre+' (mínimo 6 caracteres):');if(!n)return;await api('uupd',{uid:u.uid,pass:n});toast('Contraseña actualizada');return}
+  const u=users.find(x=>x.uid===b.dataset.baja);if(u.activo&&!confirm('¿Dar de baja a '+u.nombre+'? Ya no podrá entrar.'))return;
+  await api('uupd',{uid:u.uid,activo:!u.activo});await refresh();toast(u.activo?'Usuario reactivado':'Usuario dado de baja')})};
+$('#ut').onchange=e=>{const s=e.target.closest('[data-rol]');if(s)run(null,async()=>{await api('uupd',{uid:s.dataset.rol,rol:s.value});await refresh();toast('Rol actualizado')})};
+$('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$('#up').value,r=$('#ur').value;
+  if(!n||!e||p.length<6){toast('Completa nombre, correo y una contraseña de 6+ caracteres');return}
+  run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
+
+/* ---------- Excel ---------- */
+$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):''}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R),'Incidentes');XLSX.writeFile(wb,'incidentes_dermavan.xlsx')};
+
+init();
+</script>
+</body>
+</html>
