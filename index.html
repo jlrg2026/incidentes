@@ -94,11 +94,11 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 </head>
 <body>
 
-<!-- ============ CONEXIÓN (solo si falta la URL del servidor) ============ -->
+<!-- ============ CONEXIÓN ============ -->
 <div class="lg" id="conn" hidden><div class="card">
   <div class="brand"><i></i>Incidentes DERMAVAN</div>
   <h1>Conecta tu Google Sheet</h1>
-  <p class="sub">Pega la URL de la aplicación web de Apps Script (termina en <b>/exec</b>). También puedes dejarla fija en la constante <b>API_URL</b> del archivo.</p>
+  <p class="sub">Pega la URL de la aplicación web de Apps Script (termina en <b>/exec</b>).</p>
   <label for="cu">URL del servidor</label><input id="cu" placeholder="https://script.google.com/macros/s/…/exec">
   <button class="btn pr w" id="cb">Guardar y continuar</button>
 </div></div>
@@ -157,11 +157,11 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 
 <main id="v-usr" hidden>
   <div class="ug">
-    <div class="card"><h2>Alta de usuario</h2><p class="sub">Define su acceso con una contraseña temporal. Quien tenga acceso aquí puede entrar a este sitio; la baja lo bloquea de inmediato.</p>
+    <div class="card"><h2>Alta de usuario</h2><p class="sub">Define su acceso con una contraseña temporal.</p>
       <label for="un">Nombre completo</label><input id="un">
       <label for="ue">Correo</label><input id="ue" type="email">
       <label for="up">Contraseña temporal</label><input id="up" type="text" placeholder="Mínimo 6 caracteres">
-      <label for="ur">Rol</label><select id="ur"><option value="usuario">Usuario (reporta incidentes)</option><option value="admin">Administrador (atiende y gestiona)</option></select>
+      <label for="ur">Rol</label><select id="ur"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select>
       <button class="btn pr" id="ua" style="width:100%;justify-content:center;margin-top:1rem">Dar de alta</button></div>
     <div class="card tw"><h2 id="uh">Usuarios</h2><table><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Incidentes</th><th></th></tr></thead><tbody id="ut"></tbody></table></div>
   </div>
@@ -181,9 +181,9 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 <div class="toast" id="toast" role="status"></div>
 
 <script>
-/* ===== CONFIGURACIÓN: pega aquí la URL de tu Apps Script (termina en /exec) ===== */
+/* ===== CONFIGURACIÓN ===== */
 const API_URL='https://script.google.com/macros/s/AKfycbxN3mxyfj-ldkgNQog2669QEgtXWp1ldhFzmEXWbx5jmai7gR-UssyiE2ngB7vZCkaaOw/exec';
-/* ================================================================================ */
+/* ========================= */
 
 const SIS=['Biométrico','BlackList','CallCenter','Correo Electrónico','Cotizador','CRM Harmony','DermaLab','Enlaces de RED','Gestión de Licencias','Impresoras','Ipad','Iphone','Laptop','Páginas WEB','POPL','Red / Infraestructura','SAP','Servidores Cloud MOODLE','Servidores Cloud SAP'];
 const SLA={Alta:4,Media:24,Baja:72},RANK={Alta:0,Media:1,Baja:2};
@@ -200,30 +200,29 @@ let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
 const isA=()=>P?.rol==='admin';
 
-/* ---------- Tema día/noche ---------- */
+/* ---------- Tema ---------- */
 function theme(){const h=new Date().getHours();document.documentElement.dataset.theme=mode==='auto'?(h>=7&&h<19?'light':'dark'):mode==='day'?'light':'dark';
   $('#th').textContent=$('#lth').textContent=mode==='auto'?'🌗 Auto':mode==='day'?'☀️ Día':'🌙 Noche'}
 $('#th').onclick=$('#lth').onclick=()=>{mode={auto:'day',day:'night',night:'auto'}[mode];ls.set('inc_theme',mode);theme()};
 setInterval(theme,60000);theme();
 
-/* ---------- Comunicación con Google Sheets (Apps Script) ---------- */
+/* ---------- Comunicación ---------- */
 async function api(a,d={}){
   let j;
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify({a,t:SS?.t,...d})});
     j=await r.json();
   }catch(e){
-    console.error('[API] Fallo de red en acción "'+a+'":',e);
-    throw new Error('No hay conexión con el servidor. Revisa la URL y que la implementación sea para «Cualquier persona».');
+    console.error('[API] Error de red:',e);
+    throw new Error('No hay conexión con el servidor.');
   }
   if(!j.ok){
-    console.error('[API] Respuesta de error en acción "'+a+'":',j);
+    console.error('[API] Respuesta:',j);
     if(j.error==='SESION'){logout();throw new Error('Tu sesión expiró. Entra de nuevo.')}
     throw new Error(j.error||'El servidor devolvió un error desconocido');
   }
   return j;
 }
-/* run: si se pasa errEl, el error se pinta DENTRO del modal (visible sobre la top-layer). */
 const run=async(btn,f,errEl)=>{
   if(btn)btn.disabled=true;
   if(errEl){errEl.hidden=true;errEl.textContent=''}
@@ -240,7 +239,7 @@ const run=async(btn,f,errEl)=>{
 $('#lsv').onclick=()=>{$('#login').hidden=true;$('#conn').hidden=false;$('#cu').value=API};
 $('#cb').onclick=()=>{const u=$('#cu').value.trim();if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(u)){toast('Pega la URL completa que termina en /exec');return}API=u;ls.set('inc_api',u);init()};
 let setup=false;
-$('#ls2').onclick=()=>{setup=!setup;$('#ln').hidden=!setup;$('#lt').textContent=setup?'Crear administrador':'Inicia sesión';$('#ls').textContent=setup?'Solo funciona una vez, cuando aún no existe ningún usuario en la hoja.':'Usa el correo y la contraseña que te dio el administrador.';$('#lb').textContent=setup?'Crear y entrar':'Entrar';$('#ls2').textContent=setup?'Volver a iniciar sesión':'Primer acceso: crear administrador'};
+$('#ls2').onclick=()=>{setup=!setup;$('#ln').hidden=!setup;$('#lt').textContent=setup?'Crear administrador':'Inicia sesión';$('#ls').textContent=setup?'Solo funciona una vez.':'Usa tu correo y contraseña.';$('#lb').textContent=setup?'Crear y entrar':'Entrar';$('#ls2').textContent=setup?'Volver a iniciar sesión':'Primer acceso: crear administrador'};
 $('#lf').onsubmit=e=>{e.preventDefault();run($('#lb'),async()=>{
   const j=await api(setup?'setup':'login',{email:$('#le').value,pass:$('#lp').value,nombre:$('#lnm').value});
   SS={t:j.t,u:j.user};ls.set('inc_s',JSON.stringify(SS));$('#lp').value='';await start()})};
@@ -287,33 +286,35 @@ const fuera=t=>t.cerrado&&t.cerrado-t.creado>SLA[t.severity]*36e5;
 /* ---------- Gráficas ---------- */
 const COL={Alta:'var(--Alta)',Media:'var(--Media)',Baja:'var(--Baja)'};
 function donut(R){const C=2*Math.PI*46;let o=0;const sg=['Alta','Media','Baja'].map(s=>{const v=R.filter(t=>t.severity===s).length,l=R.length?v/R.length*C:0;const x=`<circle cx="60" cy="60" r="46" fill="none" stroke="${COL[s]}" stroke-width="16" stroke-dasharray="${l} ${C-l}" stroke-dashoffset="${-o}" transform="rotate(-90 60 60)"/>`;o+=l;return{x,s,v}});
-  return `<div class="dnt"><svg viewBox="0 0 120 120" width="130" role="img" aria-label="Por severidad"><circle cx="60" cy="60" r="46" fill="none" stroke="var(--s2)" stroke-width="16"/>${sg.map(a=>a.x).join('')}<text x="60" y="67" text-anchor="middle" font-size="24" font-weight="800" fill="currentColor" font-family="Bricolage Grotesque,sans-serif">${R.length}</text></svg><div class="leg">${sg.map(a=>`<span><i style="background:${COL[a.s]}"></i>${a.s}: <b>${a.v}</b></span>`).join('')}</div></div>`}
+  return `<div class="dnt"><svg viewBox="0 0 120 120" width="130" role="img"><circle cx="60" cy="60" r="46" fill="none" stroke="var(--s2)" stroke-width="16"/>${sg.map(a=>a.x).join('')}<text x="60" y="67" text-anchor="middle" font-size="24" font-weight="800" fill="currentColor" font-family="Bricolage Grotesque,sans-serif">${R.length}</text></svg><div class="leg">${sg.map(a=>`<span><i style="background:${COL[a.s]}"></i>${a.s}: <b>${a.v}</b></span>`).join('')}</div></div>`}
 function bars(m){const e=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,7),mx=e[0]?e[0][1]:1;return e.length?e.map(([k,v])=>`<div class="hb"><span title="${esc(k)}">${esc(k)}</span><div><i style="width:${v/mx*100}%"></i></div><span>${v}</span></div>`).join(''):'<p class="sub">Sin datos</p>'}
 function trend(R){const N=14,D=864e5,t0=new Date().setHours(0,0,0,0)-(N-1)*D,c=Array(N).fill(0),k=Array(N).fill(0);
   R.forEach(t=>{const i=Math.floor((t.creado-t0)/D);if(i>=0&&i<N)c[i]++;if(t.cerrado){const j=Math.floor((t.cerrado-t0)/D);if(j>=0&&j<N)k[j]++}});
   const mx=Math.max(1,...c,...k),W=300,H=100,p=a=>a.map((v,i)=>`${i*W/(N-1)},${H-6-v/mx*(H-16)}`).join(' ');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Tendencia 14 días"><polyline points="${p(c)}" fill="none" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/><polyline points="${p(k)}" fill="none" stroke="var(--Baja)" stroke-width="3" stroke-dasharray="5 4" stroke-linejoin="round"/></svg><div class="leg" style="grid-auto-flow:column;justify-content:start;gap:1rem"><span><i style="background:var(--ac)"></i>Creados</span><span><i style="background:var(--Baja)"></i>Cerrados</span></div>`}
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img"><polyline points="${p(c)}" fill="none" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/><polyline points="${p(k)}" fill="none" stroke="var(--Baja)" stroke-width="3" stroke-dasharray="5 4" stroke-linejoin="round"/></svg><div class="leg" style="grid-auto-flow:column;justify-content:start;gap:1rem"><span><i style="background:var(--ac)"></i>Creados</span><span><i style="background:var(--Baja)"></i>Cerrados</span></div>`}
 const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
 
 /* ---------- Render ---------- */
-function card(t){return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
-  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}${t.adjunto?'<span title="Tiene adjunto">📎</span>':''}</div></div>
+function card(t){
+  const hasAtt = t.adjunto || t.adjuntoNombre;
+  return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
+  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}${hasAtt?'<span title="Tiene adjunto">📎</span>':''}</div></div>
   <div class="st"><span class="tag ${t.status==='Cerrado'?'t-c':'t-p'}">${t.status}</span>${vencido(t)?'<span class="tag t-v">Fuera de SLA</span>':''}${t.status!=='Cerrado'&&!t.asignadoA&&isA()?'<span class="tag t-m">Sin asignar</span>':''}</div></button>`}
 function render(){
   if(!P||$('#app').hidden)return;const R=rows();
   if(view==='inc'){
     const L = isA() ? [...R].sort((a,b)=>b.creado-a.creado) : R;
-    $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes. Crea el primero con «Nuevo incidente».'}</div>`;
+    $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes.'}</div>`;
   }
   if(view==='ctl'){
     const cl=R.filter(t=>t.status==='Cerrado'),pr=R.filter(t=>t.status!=='Cerrado'),ven=data.filter(vencido).length,sa=data.filter(t=>t.status!=='Cerrado'&&!t.asignadoA).length;
     const mt=cl.length?dur(cl.reduce((a,t)=>a+t.cerrado-t.creado,0)/cl.length):'—',cum=cl.length?Math.round(cl.filter(t=>!fuera(t)).length/cl.length*100)+'%':'—';
-    $('#kpis').innerHTML=[['Total (filtro)',R.length,''],['En proceso',pr.length,''],['Cerrados',cl.length,''],['Sin asignar',sa,sa?'warn':''],['Fuera de SLA',ven,ven?'warn':''],['Cumplimiento SLA',cum,''],['Resolución media',mt,'']].map(([l,v,c])=>`<div class="card kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
+    $('#kpis').innerHTML=[['Total',R.length,''],['En proceso',pr.length,''],['Cerrados',cl.length,''],['Sin asignar',sa,sa?'warn':''],['Fuera de SLA',ven,ven?'warn':''],['Cumplimiento SLA',cum,''],['Resolución media',mt,'']].map(([l,v,c])=>`<div class="card kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
     const Q=data.filter(t=>t.status!=='Cerrado').sort((a,b)=>vencido(b)-vencido(a)||RANK[a.severity]-RANK[b.severity]||a.creado-b.creado).slice(0,8);
     $('#queue').innerHTML=Q.length?Q.map(t=>{const left=SLA[t.severity]*36e5-(Date.now()-t.creado);return `<div class="qi ${t.severity}"><div><b>${esc(t.folio)}</b><small>${t.severity}</small></div>
       <div><b style="font-family:var(--body);font-weight:700">${esc(t.system)}</b> · ${esc(t.creadoPorNombre||'Sin registro')}<small>${esc(t.description.slice(0,90))} · ${left<0?'<span style="color:var(--Alta);font-weight:700">vencido hace '+dur(-left)+'</span>':'quedan '+dur(left)} · ${t.asignadoNombre?'Atiende: '+esc(t.asignadoNombre):'Sin asignar'}</small></div>
-      <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. No hay incidentes abiertos. 🎉</div>';
-    $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas con más incidentes</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga de atención (abiertos)</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
+      <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. 🎉</div>';
+    $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
 }
 const upd=async(id,p,close)=>{await api('upd',{id,...p});try{await refresh()}catch(e){console.error('[upd] refresh falló:',e)}toast('Guardado');close?$('#dT').close():openT(id)};
 document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true));return}
@@ -342,11 +343,32 @@ $('#cr').onclick=()=>{
   run($('#cr'),async()=>{
     const payload={system:s,severity:sev,description:d};
     const f=$('#att').files[0];
+    let hasAtt = false;
     if(f){
       if(f.size>MAX_ATT){throw new Error('El archivo supera 2 MB')}
-      payload.adjunto=await fileToB64(f);
+      const b64 = await fileToB64(f);
+      payload.adjunto = b64.data;
+      payload.adjuntoNombre = b64.name;
+      hasAtt = true;
     }
-    const j=await api('add',payload);
+    
+    let j;
+    try {
+      j = await api('add', payload);
+    } catch(e) {
+      if(hasAtt) {
+         if(confirm("El servidor rechazó el incidente con el adjunto (posiblemente porque tu Apps Script no está configurado para recibir archivos).\n\n¿Deseas crear el incidente SIN el adjunto?")) {
+            delete payload.adjunto;
+            delete payload.adjuntoNombre;
+            j = await api('add', payload);
+         } else {
+            throw e;
+         }
+      } else {
+         throw e;
+      }
+    }
+
     $('#dsc').value='';$('#sys').value='';$('#att').value='';$('#attInfo').hidden=true;$('#crErr').hidden=true;
     $('#dN').close();
     toast('Incidente '+(j.folio||'')+' creado');
@@ -358,8 +380,8 @@ $('#cr').onclick=()=>{
 function openT(id){
   const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
-  const attHtml = t.adjunto
-    ? `<p class="sub">📎 Adjunto: ${t.adjunto.data ? `<a href="${esc(t.adjunto.data)}" download="${esc(t.adjunto.name||'adjunto')}" target="_blank" rel="noopener">${esc(t.adjunto.name||'archivo')}</a>` : `<b>${esc(t.adjunto.name||(typeof t.adjunto==='string'?t.adjunto:'archivo'))}</b>`}${t.adjunto.size?` <small>(${(t.adjunto.size/1024).toFixed(1)} KB)</small>`:''}</p>`
+  const attHtml = (t.adjunto || t.adjuntoNombre)
+    ? `<p class="sub">📎 Adjunto: ${t.adjunto && typeof t.adjunto === 'string' && t.adjunto.startsWith('http') ? `<a href="${esc(t.adjunto)}" target="_blank" rel="noopener">${esc(t.adjuntoNombre||'archivo')}</a>` : `<b>${esc(t.adjuntoNombre || (typeof t.adjunto === 'string' ? 'Archivo adjunto' : 'archivo'))}</b>`}</p>`
     : '';
   $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
   <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
@@ -388,7 +410,9 @@ function openT(id){
     const f=$('#attEdit').files[0];
     if(f){
       if(f.size>MAX_ATT){throw new Error('El archivo supera 2 MB')}
-      p.adjunto=await fileToB64(f);
+      const b64 = await fileToB64(f);
+      p.adjunto = b64.data;
+      p.adjuntoNombre = b64.name;
     }
     if(!Object.keys(p).length){toast('No hay cambios');return}
     await upd(t.id,p);
@@ -396,7 +420,7 @@ function openT(id){
   if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true),$('#tbErr'));
   if(!$('#dT').open)$('#dT').showModal()}
 
-/* ---------- Módulo de usuarios (solo administrador) ---------- */
+/* ---------- Usuarios ---------- */
 function renderUsers(){
   if(!isA())return;const c=count(data,t=>t.creadoPor||'');
   $('#uh').textContent=`Usuarios (${users.filter(u=>u.activo).length} activos de ${users.length})`;
@@ -404,7 +428,7 @@ function renderUsers(){
     <td><div class="uc">${av(u.nombre)}<span><b>${esc(u.nombre)}</b>${me?' (tú)':''}<br><small style="color:var(--mut)">${esc(u.email)}</small></span></div></td>
     <td><select data-rol="${u.uid}" ${me?'disabled':''}><option value="usuario" ${u.rol==='usuario'?'selected':''}>Usuario</option><option value="admin" ${u.rol==='admin'?'selected':''}>Administrador</option></select></td>
     <td><span class="tag ${u.activo?'t-c':'t-m'}">${u.activo?'Activo':'Baja'}</span></td><td>${c[u.uid]||0}</td>
-    <td><div class="uc"><button class="btn sm" data-reset="${u.uid}">Nueva clave</button>${me?'':`<button class="btn sm ${u.activo?'dn':''}" data-baja="${u.uid}">${u.activo?'Dar de baja':'Reactivar'}</button>`}</div></td></tr>`}).join('')}
+    <td><div class="uc"><button class="btn sm" data-reset="${u.uid}">Nueva clave</button>${me?'':`<button class="btn sm ${u.activo?'dn':''}" data-baja="${u.uid}">${u.activo?'Baja':'Reactivar'}</button>`}</div></td></tr>`}).join('')}
 $('#ut').onclick=e=>{const b=e.target.closest('[data-baja],[data-reset]');if(!b)return;run(null,async()=>{
   if(b.dataset.reset){const u=users.find(x=>x.uid===b.dataset.reset),n=prompt('Nueva contraseña temporal para '+u.nombre+' (mínimo 6 caracteres):');if(!n)return;await api('uupd',{uid:u.uid,pass:n});toast('Contraseña actualizada');return}
   const u=users.find(x=>x.uid===b.dataset.baja);if(u.activo&&!confirm('¿Dar de baja a '+u.nombre+'? Ya no podrá entrar.'))return;
@@ -415,7 +439,7 @@ $('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$(
   run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
 
 /* ---------- Excel ---------- */
-$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'','Adjunto':t.adjunto?(t.adjunto.name||'Sí'):''}));
+$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'','Adjunto':t.adjuntoNombre||(t.adjunto?'Sí':'')}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R),'Incidentes');XLSX.writeFile(wb,'incidentes_dermavan.xlsx')};
 
 init();
