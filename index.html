@@ -88,6 +88,7 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 .log li{padding-left:.9rem;font-size:.86rem}.log small{display:block;color:var(--mut)}
 .acts{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,2rem);background:var(--ink);color:var(--bg);padding:.7rem 1.1rem;border-radius:999px;opacity:0;pointer-events:none;transition:.3s;z-index:30;max-width:92vw}.toast.on{opacity:1;transform:translate(-50%,0)}
+.errbox{color:var(--Alta);font-weight:700;font-size:.9rem;margin:.6rem 0 0;padding:.55rem .8rem;border:1px solid var(--Alta);border-radius:10px;background:color-mix(in srgb,var(--Alta) 10%,transparent)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -174,6 +175,7 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
   <label for="att">Adjunto (opcional, máx. 2 MB)</label>
   <input type="file" id="att">
   <p class="sub" id="attInfo" hidden></p>
+  <p class="errbox" id="crErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cancelar</button><button class="btn pr" id="cr">Crear incidente</button></div></div></dialog>
 <dialog id="dT"><div class="dlg" id="tb"></div></dialog>
 <div class="toast" id="toast" role="status"></div>
@@ -184,7 +186,7 @@ const API_URL='https://script.google.com/macros/s/AKfycbxN3mxyfj-ldkgNQog2669QEg
 /* ================================================================================ */
 
 const SIS=['Biométrico','BlackList','CallCenter','Correo Electrónico','Cotizador','CRM Harmony','DermaLab','Enlaces de RED','Gestión de Licencias','Impresoras','Ipad','Iphone','Laptop','Páginas WEB','POPL','Red / Infraestructura','SAP','Servidores Cloud MOODLE','Servidores Cloud SAP'];
-const SLA={Alta:4,Media:24,Baja:72},RANK={Alta:0,Media:1,Baja:2}; // horas objetivo de resolución
+const SLA={Alta:4,Media:24,Baja:72},RANK={Alta:0,Media:1,Baja:2};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -192,7 +194,7 @@ const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFix
 const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
-const MAX_ATT=2*1024*1024; // 2 MB
+const MAX_ATT=2*1024*1024;
 const fileToB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({name:f.name,mime:f.type,size:f.size,data:r.result});r.onerror=()=>rej(new Error('No se pudo leer el archivo'));r.readAsDataURL(f)});
 let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
@@ -206,10 +208,33 @@ setInterval(theme,60000);theme();
 
 /* ---------- Comunicación con Google Sheets (Apps Script) ---------- */
 async function api(a,d={}){
-  let j;try{const r=await fetch(API,{method:'POST',body:JSON.stringify({a,t:SS?.t,...d})});j=await r.json()}
-  catch{throw new Error('No hay conexión con el servidor. Revisa la URL y que la implementación sea para «Cualquier persona».')}
-  if(!j.ok){if(j.error==='SESION'){logout();throw new Error('Tu sesión expiró. Entra de nuevo.')}throw new Error(j.error)}return j}
-const run=async(btn,f)=>{if(btn)btn.disabled=true;try{await f()}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}};
+  let j;
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({a,t:SS?.t,...d})});
+    j=await r.json();
+  }catch(e){
+    console.error('[API] Fallo de red en acción "'+a+'":',e);
+    throw new Error('No hay conexión con el servidor. Revisa la URL y que la implementación sea para «Cualquier persona».');
+  }
+  if(!j.ok){
+    console.error('[API] Respuesta de error en acción "'+a+'":',j);
+    if(j.error==='SESION'){logout();throw new Error('Tu sesión expiró. Entra de nuevo.')}
+    throw new Error(j.error||'El servidor devolvió un error desconocido');
+  }
+  return j;
+}
+/* run: si se pasa errEl, el error se pinta DENTRO del modal (visible sobre la top-layer). */
+const run=async(btn,f,errEl)=>{
+  if(btn)btn.disabled=true;
+  if(errEl){errEl.hidden=true;errEl.textContent=''}
+  try{await f()}
+  catch(e){
+    console.error('[run] Error:',e);
+    if(errEl){errEl.textContent='⚠ '+(e.message||'Error inesperado');errEl.hidden=false}
+    else toast(e.message||'Error inesperado');
+  }
+  finally{if(btn)btn.disabled=false}
+};
 
 /* ---------- Acceso ---------- */
 $('#lsv').onclick=()=>{$('#login').hidden=true;$('#conn').hidden=false;$('#cu').value=API};
@@ -259,7 +284,7 @@ function rows(){
 const vencido=t=>t.status!=='Cerrado'&&Date.now()-t.creado>SLA[t.severity]*36e5;
 const fuera=t=>t.cerrado&&t.cerrado-t.creado>SLA[t.severity]*36e5;
 
-/* ---------- Gráficas (SVG, respetan día/noche) ---------- */
+/* ---------- Gráficas ---------- */
 const COL={Alta:'var(--Alta)',Media:'var(--Media)',Baja:'var(--Baja)'};
 function donut(R){const C=2*Math.PI*46;let o=0;const sg=['Alta','Media','Baja'].map(s=>{const v=R.filter(t=>t.severity===s).length,l=R.length?v/R.length*C:0;const x=`<circle cx="60" cy="60" r="46" fill="none" stroke="${COL[s]}" stroke-width="16" stroke-dasharray="${l} ${C-l}" stroke-dashoffset="${-o}" transform="rotate(-90 60 60)"/>`;o+=l;return{x,s,v}});
   return `<div class="dnt"><svg viewBox="0 0 120 120" width="130" role="img" aria-label="Por severidad"><circle cx="60" cy="60" r="46" fill="none" stroke="var(--s2)" stroke-width="16"/>${sg.map(a=>a.x).join('')}<text x="60" y="67" text-anchor="middle" font-size="24" font-weight="800" fill="currentColor" font-family="Bricolage Grotesque,sans-serif">${R.length}</text></svg><div class="leg">${sg.map(a=>`<span><i style="background:${COL[a.s]}"></i>${a.s}: <b>${a.v}</b></span>`).join('')}</div></div>`}
@@ -290,8 +315,8 @@ function render(){
       <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. No hay incidentes abiertos. 🎉</div>';
     $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas con más incidentes</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga de atención (abiertos)</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
 }
-const upd=async(id,p,close)=>{await api('upd',{id,...p});await refresh();toast('Guardado');close?$('#dT').close():openT(id)};
-document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true).catch(x=>{throw x}));return}
+const upd=async(id,p,close)=>{await api('upd',{id,...p});try{await refresh()}catch(e){console.error('[upd] refresh falló:',e)}toast('Guardado');close?$('#dT').close():openT(id)};
+document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true));return}
   const b=e.target.closest('[data-t]');if(b)openT(b.dataset.t);
   if(e.target.closest('[data-close]'))e.target.closest('dialog').close()});
 
@@ -304,26 +329,37 @@ $('#att').onchange=()=>{
   if(f.size>MAX_ATT){toast('El archivo supera 2 MB');$('#att').value='';info.hidden=true;return}
   info.hidden=false;info.textContent=f.name+' · '+(f.size/1024).toFixed(1)+' KB';
 };
-$('#new').onclick=()=>{drawSev();$('#att').value='';$('#attInfo').hidden=true;$('#dN').showModal()};
-$('#cr').onclick=()=>{const s=$('#sys').value,d=$('#dsc').value.trim();if(!s||!d){toast('Completa sistema y descripción');return}
+$('#new').onclick=()=>{
+  drawSev();
+  $('#att').value='';
+  $('#attInfo').hidden=true;
+  $('#crErr').hidden=true;$('#crErr').textContent='';
+  $('#dN').showModal();
+};
+$('#cr').onclick=()=>{
+  const s=$('#sys').value,d=$('#dsc').value.trim();
+  if(!s||!d){toast('Completa sistema y descripción');return}
   run($('#cr'),async()=>{
     const payload={system:s,severity:sev,description:d};
     const f=$('#att').files[0];
     if(f){
-      if(f.size>MAX_ATT){toast('El archivo supera 2 MB');return}
+      if(f.size>MAX_ATT){throw new Error('El archivo supera 2 MB')}
       payload.adjunto=await fileToB64(f);
     }
     const j=await api('add',payload);
-    $('#dsc').value='';$('#sys').value='';$('#att').value='';$('#attInfo').hidden=true;$('#dN').close();
-    await refresh();toast('Incidente '+j.folio+' creado');
-  })};
+    $('#dsc').value='';$('#sys').value='';$('#att').value='';$('#attInfo').hidden=true;$('#crErr').hidden=true;
+    $('#dN').close();
+    toast('Incidente '+(j.folio||'')+' creado');
+    try{await refresh()}catch(e){console.error('[create] refresh falló:',e)}
+  },$('#crErr'));
+};
 
 /* ---------- Detalle / atención ---------- */
 function openT(id){
   const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
   const attHtml = t.adjunto
-    ? `<p class="sub">📎 Adjunto: ${t.adjunto.data ? `<a href="${esc(t.adjunto.data)}" download="${esc(t.adjunto.name||'adjunto')}" target="_blank" rel="noopener">${esc(t.adjunto.name||'archivo')}</a>` : `<b>${esc(t.adjunto.name||'archivo')}</b>`}${t.adjunto.size?` <small>(${(t.adjunto.size/1024).toFixed(1)} KB)</small>`:''}</p>`
+    ? `<p class="sub">📎 Adjunto: ${t.adjunto.data ? `<a href="${esc(t.adjunto.data)}" download="${esc(t.adjunto.name||'adjunto')}" target="_blank" rel="noopener">${esc(t.adjunto.name||'archivo')}</a>` : `<b>${esc(t.adjunto.name||(typeof t.adjunto==='string'?t.adjunto:'archivo'))}</b>`}${t.adjunto.size?` <small>(${(t.adjunto.size/1024).toFixed(1)} KB)</small>`:''}</p>`
     : '';
   $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
   <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
@@ -336,6 +372,7 @@ function openT(id){
   <label for="attEdit">Adjuntar archivo (opcional, máx. 2 MB)</label>
   <input type="file" id="attEdit">
   <p class="sub" id="attEditInfo" hidden></p>
+  <p class="errbox" id="tbErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cerrar ventana</button><button class="btn" id="sv2">Guardar</button>${A?`<button class="btn pr" id="stt">${cerr?'Reabrir':'Cerrar incidente'}</button>`:''}</div>`;
   $('#attEdit').onchange=()=>{
     const f=$('#attEdit').files[0],info=$('#attEditInfo');
@@ -350,13 +387,13 @@ function openT(id){
     if(A&&($('#as').value||'')!==(t.asignadoA||''))p.asignadoA=$('#as').value;
     const f=$('#attEdit').files[0];
     if(f){
-      if(f.size>MAX_ATT){toast('El archivo supera 2 MB');return}
+      if(f.size>MAX_ATT){throw new Error('El archivo supera 2 MB')}
       p.adjunto=await fileToB64(f);
     }
     if(!Object.keys(p).length){toast('No hay cambios');return}
     await upd(t.id,p);
-  })};
-  if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true));
+  },$('#tbErr'))};
+  if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true),$('#tbErr'));
   if(!$('#dT').open)$('#dT').showModal()}
 
 /* ---------- Módulo de usuarios (solo administrador) ---------- */
