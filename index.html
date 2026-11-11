@@ -213,11 +213,11 @@ async function api(a,d={}){
     const r=await fetch(API,{method:'POST',body:JSON.stringify({a,t:SS?.t,...d})});
     j=await r.json();
   }catch(e){
-    console.error('[API] Error de red:',e);
-    throw new Error('No hay conexión con el servidor.');
+    console.error('[API] Error de red o parseo:',e);
+    throw new Error('No hay conexión con el servidor o la respuesta no es válida.');
   }
   if(!j.ok){
-    console.error('[API] Respuesta:',j);
+    console.error('[API] Respuesta del servidor:',j);
     if(j.error==='SESION'){logout();throw new Error('Tu sesión expiró. Entra de nuevo.')}
     throw new Error(j.error||'El servidor devolvió un error desconocido');
   }
@@ -259,8 +259,8 @@ async function start(){
   document.querySelectorAll('.adm').forEach(e=>e.hidden=!isA());
   const tabs=isA()?[['ctl','Centro de control'],['inc','Incidentes'],['usr','Usuarios']]:[['inc','Mis incidentes']];
   $('#nav').innerHTML=tabs.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('');
-  $('#fsis').innerHTML='<option value="">Todos</option>'+SIS.map(s=>`<option>${s}</option>`).join('');
-  $('#sys').innerHTML='<option value="">Seleccione sistema</option>'+SIS.map(s=>`<option>${s}</option>`).join('');
+  $('#fsis').innerHTML='<option value="">Todos</option>'+SIS.map(s=>`<option value="${s}">${s}</option>`).join('');
+  $('#sys').innerHTML='<option value="">Seleccione sistema</option>'+SIS.map(s=>`<option value="${s}">${s}</option>`).join('');
   go(isA()?'ctl':'inc');
   clearInterval(timer);timer=setInterval(()=>{if(!document.hidden&&!document.querySelector('dialog[open]'))refresh().catch(()=>{})},20000)}
 async function refresh(){
@@ -338,34 +338,37 @@ $('#new').onclick=()=>{
   $('#dN').showModal();
 };
 $('#cr').onclick=()=>{
-  const s=$('#sys').value,d=$('#dsc').value.trim();
+  const s=$('#sys').value, d=$('#dsc').value.trim();
   if(!s||!d){toast('Completa sistema y descripción');return}
-  run($('#cr'),async()=>{
-    const payload={system:s,severity:sev,description:d};
-    const f=$('#att').files[0];
+  
+  run($('#cr'), async () => {
+    const payload = { system: s, severity: sev, description: d };
+    const f = $('#att').files[0];
     let hasAtt = false;
-    if(f){
-      if(f.size>MAX_ATT){throw new Error('El archivo supera 2 MB')}
+    
+    if (f) {
+      if (f.size > MAX_ATT) throw new Error('El archivo supera 2 MB');
       const b64 = await fileToB64(f);
       payload.adjunto = b64.data;
       payload.adjuntoNombre = b64.name;
       hasAtt = true;
     }
-    
+
     let j;
     try {
       j = await api('add', payload);
     } catch(e) {
-      if(hasAtt) {
-         if(confirm("El servidor rechazó el incidente con el adjunto (posiblemente porque tu Apps Script no está configurado para recibir archivos).\n\n¿Deseas crear el incidente SIN el adjunto?")) {
-            delete payload.adjunto;
-            delete payload.adjuntoNombre;
-            j = await api('add', payload);
-         } else {
-            throw e;
-         }
+      if (hasAtt) {
+        const reintentar = confirm("El servidor rechazó el incidente con el adjunto (posiblemente porque tu Apps Script no está configurado para recibir archivos).\n\n¿Deseas crear el incidente SIN el adjunto?");
+        if (reintentar) {
+          // Reintentar con un payload limpio (sin rastro de adjunto)
+          const cleanPayload = { system: s, severity: sev, description: d };
+          j = await api('add', cleanPayload);
+        } else {
+          throw e;
+        }
       } else {
-         throw e;
+        throw e;
       }
     }
 
@@ -373,7 +376,7 @@ $('#cr').onclick=()=>{
     $('#dN').close();
     toast('Incidente '+(j.folio||'')+' creado');
     try{await refresh()}catch(e){console.error('[create] refresh falló:',e)}
-  },$('#crErr'));
+  }, $('#crErr'));
 };
 
 /* ---------- Detalle / atención ---------- */
