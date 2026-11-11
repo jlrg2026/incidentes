@@ -171,6 +171,9 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
   <label for="sys">Sistema</label><select id="sys"></select>
   <label>Severidad</label><div class="seg" id="sv"></div>
   <label for="dsc">Descripción</label><textarea id="dsc" placeholder="¿Qué pasó, desde cuándo y a quién afecta?"></textarea>
+  <label for="att">Adjunto (opcional, máx. 2 MB)</label>
+  <input type="file" id="att">
+  <p class="sub" id="attInfo" hidden></p>
   <div class="acts"><button class="btn" data-close>Cancelar</button><button class="btn pr" id="cr">Crear incidente</button></div></div></dialog>
 <dialog id="dT"><div class="dlg" id="tb"></div></dialog>
 <div class="toast" id="toast" role="status"></div>
@@ -189,6 +192,8 @@ const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFix
 const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
+const MAX_ATT=2*1024*1024; // 2 MB
+const fileToB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({name:f.name,mime:f.type,size:f.size,data:r.result});r.onerror=()=>rej(new Error('No se pudo leer el archivo'));r.readAsDataURL(f)});
 let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
 const isA=()=>P?.rol==='admin';
@@ -267,11 +272,14 @@ const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
 
 /* ---------- Render ---------- */
 function card(t){return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
-  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}</div></div>
+  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}${t.adjunto?'<span title="Tiene adjunto">📎</span>':''}</div></div>
   <div class="st"><span class="tag ${t.status==='Cerrado'?'t-c':'t-p'}">${t.status}</span>${vencido(t)?'<span class="tag t-v">Fuera de SLA</span>':''}${t.status!=='Cerrado'&&!t.asignadoA&&isA()?'<span class="tag t-m">Sin asignar</span>':''}</div></button>`}
 function render(){
   if(!P||$('#app').hidden)return;const R=rows();
-  if(view==='inc')$('#list').innerHTML=R.length?R.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes. Crea el primero con «Nuevo incidente».'}</div>`;
+  if(view==='inc'){
+    const L = isA() ? [...R].sort((a,b)=>b.creado-a.creado) : R;
+    $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes. Crea el primero con «Nuevo incidente».'}</div>`;
+  }
   if(view==='ctl'){
     const cl=R.filter(t=>t.status==='Cerrado'),pr=R.filter(t=>t.status!=='Cerrado'),ven=data.filter(vencido).length,sa=data.filter(t=>t.status!=='Cerrado'&&!t.asignadoA).length;
     const mt=cl.length?dur(cl.reduce((a,t)=>a+t.cerrado-t.creado,0)/cl.length):'—',cum=cl.length?Math.round(cl.filter(t=>!fuera(t)).length/cl.length*100)+'%':'—';
@@ -290,26 +298,64 @@ document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if
 /* ---------- Alta de incidente ---------- */
 const drawSev=()=>$('#sv').innerHTML=['Alta','Media','Baja'].map(s=>`<button class="${s}" aria-pressed="${s===sev}" data-s="${s}">${s}</button>`).join('');
 $('#sv').onclick=e=>{const b=e.target.closest('[data-s]');if(b){sev=b.dataset.s;drawSev()}};
-$('#new').onclick=()=>{drawSev();$('#dN').showModal()};
+$('#att').onchange=()=>{
+  const f=$('#att').files[0],info=$('#attInfo');
+  if(!f){info.hidden=true;return}
+  if(f.size>MAX_ATT){toast('El archivo supera 2 MB');$('#att').value='';info.hidden=true;return}
+  info.hidden=false;info.textContent=f.name+' · '+(f.size/1024).toFixed(1)+' KB';
+};
+$('#new').onclick=()=>{drawSev();$('#att').value='';$('#attInfo').hidden=true;$('#dN').showModal()};
 $('#cr').onclick=()=>{const s=$('#sys').value,d=$('#dsc').value.trim();if(!s||!d){toast('Completa sistema y descripción');return}
-  run($('#cr'),async()=>{const j=await api('add',{system:s,severity:sev,description:d});$('#dsc').value='';$('#sys').value='';$('#dN').close();await refresh();toast('Incidente '+j.folio+' creado')})};
+  run($('#cr'),async()=>{
+    const payload={system:s,severity:sev,description:d};
+    const f=$('#att').files[0];
+    if(f){
+      if(f.size>MAX_ATT){toast('El archivo supera 2 MB');return}
+      payload.adjunto=await fileToB64(f);
+    }
+    const j=await api('add',payload);
+    $('#dsc').value='';$('#sys').value='';$('#att').value='';$('#attInfo').hidden=true;$('#dN').close();
+    await refresh();toast('Incidente '+j.folio+' creado');
+  })};
 
 /* ---------- Detalle / atención ---------- */
 function openT(id){
   const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
+  const attHtml = t.adjunto
+    ? `<p class="sub">📎 Adjunto: ${t.adjunto.data ? `<a href="${esc(t.adjunto.data)}" download="${esc(t.adjunto.name||'adjunto')}" target="_blank" rel="noopener">${esc(t.adjunto.name||'archivo')}</a>` : `<b>${esc(t.adjunto.name||'archivo')}</b>`}${t.adjunto.size?` <small>(${(t.adjunto.size/1024).toFixed(1)} KB)</small>`:''}</p>`
+    : '';
   $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
   <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
   <p class="sub">${cerr?'Resuelto en '+dur(t.cerrado-t.creado)+(fuera(t)?' (fuera de SLA)':' (dentro de SLA)'):'Abierto hace '+dur(Date.now()-t.creado)+' · objetivo '+SLA[t.severity]+' h'}</p>
   <label for="ed">Descripción</label><textarea id="ed" style="min-height:70px">${esc(t.description)}</textarea>
   ${A?`<label for="as">Asignado a</label><select id="as"><option value="">Sin asignar</option>${ops}</select>`:''}
+  ${attHtml}
   <ul class="log">${t.bit.map(l=>`<li><b>${esc(l.por)}</b> ${esc(l.text)}<small>${fmt(l.at)}</small></li>`).join('')}</ul>
   <label for="nc">Comentario</label><textarea id="nc" style="min-height:56px"></textarea>
+  <label for="attEdit">Adjuntar archivo (opcional, máx. 2 MB)</label>
+  <input type="file" id="attEdit">
+  <p class="sub" id="attEditInfo" hidden></p>
   <div class="acts"><button class="btn" data-close>Cerrar ventana</button><button class="btn" id="sv2">Guardar</button>${A?`<button class="btn pr" id="stt">${cerr?'Reabrir':'Cerrar incidente'}</button>`:''}</div>`;
-  $('#sv2').onclick=()=>{const p={},d=$('#ed').value.trim(),c=$('#nc').value.trim();
-    if(d&&d!==t.description)p.description=d;if(c)p.comentario=c;
+  $('#attEdit').onchange=()=>{
+    const f=$('#attEdit').files[0],info=$('#attEditInfo');
+    if(!f){info.hidden=true;return}
+    if(f.size>MAX_ATT){toast('El archivo supera 2 MB');$('#attEdit').value='';info.hidden=true;return}
+    info.hidden=false;info.textContent=f.name+' · '+(f.size/1024).toFixed(1)+' KB';
+  };
+  $('#sv2').onclick=()=>{run($('#sv2'),async()=>{
+    const p={},d=$('#ed').value.trim(),c=$('#nc').value.trim();
+    if(d&&d!==t.description)p.description=d;
+    if(c)p.comentario=c;
     if(A&&($('#as').value||'')!==(t.asignadoA||''))p.asignadoA=$('#as').value;
-    if(!Object.keys(p).length){toast('No hay cambios');return}run($('#sv2'),()=>upd(t.id,p))};
+    const f=$('#attEdit').files[0];
+    if(f){
+      if(f.size>MAX_ATT){toast('El archivo supera 2 MB');return}
+      p.adjunto=await fileToB64(f);
+    }
+    if(!Object.keys(p).length){toast('No hay cambios');return}
+    await upd(t.id,p);
+  })};
   if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true));
   if(!$('#dT').open)$('#dT').showModal()}
 
@@ -332,7 +378,7 @@ $('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$(
   run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
 
 /* ---------- Excel ---------- */
-$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):''}));
+$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'','Adjunto':t.adjunto?(t.adjunto.name||'Sí'):''}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R),'Incidentes');XLSX.writeFile(wb,'incidentes_dermavan.xlsx')};
 
 init();
