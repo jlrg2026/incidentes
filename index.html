@@ -113,7 +113,8 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
     <label for="lp">Contraseña</label><input id="lp" type="password" autocomplete="current-password" minlength="6" required>
     <button class="btn pr w" id="lb">Entrar</button>
   </form>
-  <button class="lk" id="ls2">Primer acceso: crear administrador</button>
+  <button class="lk" id="ls2">Primer acceso: crear administrador</button><br>
+  <button class="lk" id="lsv">Cambiar URL del servidor</button>
   <div style="margin-top:.8rem"><button class="btn" id="lth" type="button"></button></div>
 </div></div>
 
@@ -188,7 +189,7 @@ const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFix
 const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
-let API=API_URL||ls.get('inc_api')||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
+let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
 const isA=()=>P?.rol==='admin';
 
@@ -206,6 +207,7 @@ async function api(a,d={}){
 const run=async(btn,f)=>{if(btn)btn.disabled=true;try{await f()}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}};
 
 /* ---------- Acceso ---------- */
+$('#lsv').onclick=()=>{$('#login').hidden=true;$('#conn').hidden=false;$('#cu').value=API};
 $('#cb').onclick=()=>{const u=$('#cu').value.trim();if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(u)){toast('Pega la URL completa que termina en /exec');return}API=u;ls.set('inc_api',u);init()};
 let setup=false;
 $('#ls2').onclick=()=>{setup=!setup;$('#ln').hidden=!setup;$('#lt').textContent=setup?'Crear administrador':'Inicia sesión';$('#ls').textContent=setup?'Solo funciona una vez, cuando aún no existe ningún usuario en la hoja.':'Usa el correo y la contraseña que te dio el administrador.';$('#lb').textContent=setup?'Crear y entrar':'Entrar';$('#ls2').textContent=setup?'Volver a iniciar sesión':'Primer acceso: crear administrador'};
