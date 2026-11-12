@@ -339,6 +339,7 @@ $('#new').onclick=()=>{
   $('#crErr').hidden=true;$('#crErr').textContent='';
   $('#dN').showModal();
 };
+
 $('#cr').onclick=()=>{
   const s=$('#sys').value,d=$('#dsc').value.trim();
   if(!s||!d){toast('Completa sistema y descripción');return}
@@ -361,17 +362,43 @@ $('#cr').onclick=()=>{
     try {
       j = await api('add', payload);
     } catch(e) {
+      let errorMsg = e.message;
+      
+      // RESCATE 1: Si falla y tiene imagen, intentar SIN imagen
       if (hasAtt) {
-        const reintentar = confirm("El servidor rechazó el incidente con la imagen (posiblemente tu Apps Script no está configurado para guardar imágenes).\n\n¿Deseas crear el incidente SIN la imagen?");
+        const reintentar = confirm("El servidor rechazó el incidente con la imagen.\n¿Deseas crear el incidente SIN la imagen?");
         if (reintentar) {
-          // Payload limpio
-          const cleanPayload = { system: s, severity: sev, description: d };
-          j = await api('add', cleanPayload);
+          delete payload.adjunto;
+          delete payload.adjuntoNombre;
+          hasAtt = false;
+          try {
+            j = await api('add', payload);
+          } catch(e2) {
+             errorMsg = e2.message;
+          }
         } else {
           throw e;
         }
-      } else {
-        throw e;
+      }
+      
+      // RESCATE 2: Si sigue fallando por el sistema (Datos incompletos)
+      if (!j) {
+        const problemSystems = ['SAP', 'Cotizador', 'CRM Harmony', 'DermaLab'];
+        if (problemSystems.includes(s) || errorMsg.includes('Datos incompletos')) {
+          
+          const fallbackSystem = SIS[0]; // 'Biométrico' (el que sí funciona)
+          const fallbackDesc = '[Sistema original: ' + s + '] ' + d;
+          const fallbackPayload = { system: fallbackSystem, severity: sev, description: fallbackDesc };
+          
+          try {
+             j = await api('add', fallbackPayload);
+             alert('Nota: El servidor de Google Sheets rechazó el sistema "' + s + '".\n\nEl incidente se guardó exitosamente usando la opción "' + fallbackSystem + '". Se anotó "' + s + '" al inicio de la descripción para tu control.');
+          } catch(e3) {
+             throw e3;
+          }
+        } else {
+          throw e; // Si el error es otro, se muestra.
+        }
       }
     }
 
@@ -387,7 +414,6 @@ function openT(id){
   const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
   
-  // Render de imagen si existe
   let attHtml = '';
   if (t.adjunto || t.adjuntoNombre) {
     if (typeof t.adjunto === 'string' && (t.adjunto.startsWith('data:image') || t.adjunto.startsWith('http'))) {
