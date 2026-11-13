@@ -331,26 +331,8 @@ $('#cr').onclick=()=>{
   
   run($('#cr'), async () => {
     const payload = { system: s, severity: sev, description: d };
-    let j;
-    try {
-      j = await api('add', payload);
-    } catch(e) {
-      let errorMsg = e.message;
-      const problemSystems = ['SAP', 'Cotizador', 'CRM Harmony', 'DermaLab'];
-      if (problemSystems.includes(s) || errorMsg.includes('Datos incompletos')) {
-        const fallbackSystem = SIS[0]; // 'Biométrico' (el que sí funciona)
-        const fallbackDesc = '[Sistema original: ' + s + '] ' + d;
-        const fallbackPayload = { system: fallbackSystem, severity: sev, description: fallbackDesc };
-        try {
-          j = await api('add', fallbackPayload);
-          alert('Nota: El servidor de Google Sheets rechazó el sistema "' + s + '".\n\nEl incidente se guardó exitosamente usando la opción "' + fallbackSystem + '". Se anotó "' + s + '" al inicio de la descripción para tu control.');
-        } catch(e3) {
-          throw e3;
-        }
-      } else {
-        throw e;
-      }
-    }
+    // Llamada directa, sin trampas de "respaldo" ni cambios de sistema
+    const j = await api('add', payload);
 
     $('#dsc').value='';$('#sys').value='';$('#crErr').hidden=true;
     $('#dN').close();
