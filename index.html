@@ -6,6 +6,8 @@
 <title>Incidentes DERMAVAN</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{--bg:#e6eef2;--s:#fff;--s2:#f1f6f8;--ink:#0d2a35;--mut:#58717c;--line:#d1dee4;--ac:#00748f;--aci:#fff;
 --sh:0 1px 2px rgba(0,60,80,.07),0 8px 24px rgba(0,60,80,.08);--Alta:#d6234a;--Media:#d99a00;--Baja:#2e9e6b;
@@ -134,6 +136,7 @@ input[type=file]{padding:.45rem .6rem}
   <button class="live" id="live" title="Actualizar ahora"><b></b><span id="lv">En vivo</span></button>
   <button class="btn pr" id="new">+ Nuevo incidente</button>
   <a class="btn" id="gs" target="_blank" rel="noopener" hidden>📄 Google Sheet</a>
+  <button class="btn" id="pdf" title="Descargar PDF con los filtros actuales">📑 PDF</button>
   <button class="btn" id="th"></button>
   <span class="uc" id="who"></span>
   <button class="btn sm" id="pw">Clave</button>
@@ -158,6 +161,7 @@ input[type=file]{padding:.45rem .6rem}
   <div class="kpis" id="kpis"></div>
   <div class="card" style="margin-bottom:1rem"><div class="qh"><h3>Cola de atención · todos los abiertos, los más urgentes primero</h3></div><div class="q" id="queue"></div></div>
   <div class="grid" id="dash"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:1rem"><button class="btn pr" id="pdfC" title="Descargar reporte PDF del Centro de Control">📊 Reporte PDF</button></div>
 </main>
 
 <main id="v-inc" style="padding-top:0" hidden><div class="list" id="list"></div></main>
@@ -314,7 +318,7 @@ async function refresh(){
   if(!$('#app').hidden){render();renderUsers()}}
 $('#live').onclick=()=>run(null,async()=>{await refresh();toast('Datos actualizados')});
 function go(v){view=v;document.querySelectorAll('#nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===v));
-  ['ctl','inc','usr'].forEach(k=>$('#v-'+k).hidden=k!==v);$('#bars').hidden=v==='usr';render()}
+  ['ctl','inc','usr'].forEach(k=>$('#v-'+k).hidden=k!==v);$('#bars').hidden=v==='usr';$('#pdf').hidden=v==='usr';render()}
 $('#nav').onclick=e=>{const b=e.target.closest('[data-v]');if(b)go(b.dataset.v)};
 
 /* ---------- Filtros ---------- */
@@ -441,6 +445,139 @@ $('#ut').onchange=e=>{const s=e.target.closest('[data-rol]');if(s)run(null,async
 $('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$('#up').value,r=$('#ur').value;
   if(!n||!e||p.length<6){toast('Completa nombre, correo y una contraseña de 6+ caracteres');return}
   run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
+
+/* ---------- Reportes PDF ---------- */
+const PC={ac:[0,116,143],ink:[13,42,53],mut:[88,113,124],line:[209,222,228],bg:[241,246,248],Alta:[214,35,74],Media:[217,154,0],Baja:[46,158,107]};
+const pt=s=>String(s??'').replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC]/g,'').replace(/[ \t]+/g,' ').trim();
+const fmtF=t=>t?new Date(t).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
+const hoy=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const fit=(doc,s,w)=>{s=pt(s);if(doc.getTextWidth(s)<=w)return s;while(s.length>1&&doc.getTextWidth(s+'…')>w)s=s.slice(0,-1);return s+'…'};
+const slaTxt=t=>t.cerrado?(fuera(t)?'Fuera de SLA':'Cumplido'):(vencido(t)?'Vencido':'En tiempo');
+
+function pdfNew(orient,title,sub){
+  const J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J)throw new Error('No se pudo cargar el generador de PDF. Revisa tu conexión y recarga la página.');
+  const doc=new J({orientation:orient,unit:'pt',format:'a4'});
+  if(typeof doc.autoTable!=='function')throw new Error('No se pudo cargar el generador de tablas PDF. Recarga la página.');
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+  doc.setFillColor(...PC.ac);doc.rect(0,0,W,78,'F');
+  doc.setFillColor(255,255,255);doc.roundedRect(36,26,34,24,4,4,'F');
+  doc.setFillColor(...PC.ac);doc.circle(36,34,5,'F');doc.circle(70,34,5,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text(pt(title),84,40);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(pt(sub),84,58);
+  doc.setFontSize(8.5);doc.text('Generado: '+fmtF(Date.now()),W-36,36,{align:'right'});
+  doc.text(pt('Por: '+P.nombre+' ('+(isA()?'Administrador':'Usuario')+')'),W-36,50,{align:'right'});
+  return{doc,W,H,y:100}}
+function pdfFinish(doc,name){
+  const n=doc.internal.getNumberOfPages(),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+  for(let i=1;i<=n;i++){doc.setPage(i);
+    if(i>1){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...PC.ac);doc.text('Incidentes DERMAVAN',36,26);doc.setDrawColor(...PC.line);doc.setLineWidth(.6);doc.line(36,34,W-36,34)}
+    doc.setDrawColor(...PC.line);doc.setLineWidth(.6);doc.line(36,H-32,W-36,H-32);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...PC.mut);
+    doc.text('Incidentes DERMAVAN · Información confidencial',36,H-18);doc.text('Página '+i+' de '+n,W-36,H-18,{align:'right'})}
+  doc.save(name)}
+function secT(doc,x,y,t){doc.setFillColor(...PC.ac);doc.rect(x,y-9,3,12,'F');doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...PC.ink);doc.text(t,x+9,y)}
+function filtros(){
+  const v=id=>$('#'+id).value,dd=s=>s?s.split('-').reverse().join('/'):'Sin límite',as=v('fas');
+  return[['Desde',dd(v('d1'))],['Hasta',dd(v('d2'))],['Sistema',v('fsis')||'Todos'],['Severidad',v('fsev')||'Todas'],['Estado',v('fst')||'Todos'],
+    ...(isA()?[['Atención',as==='none'?'Sin asignar':as==='me'?'Asignados a mí':'Todos']]:[]),['Búsqueda',v('q').trim()||'—']]}
+function filterGrid(doc,W,y){
+  const it=filtros(),cw=(W-72)/4,h=Math.ceil(it.length/4)*30+12;
+  secT(doc,36,y,'Filtros aplicados');y+=10;
+  doc.setFillColor(...PC.bg);doc.setDrawColor(...PC.line);doc.setLineWidth(.6);doc.roundedRect(36,y,W-72,h,6,6,'FD');
+  it.forEach(([l,val],i)=>{const x=48+(i%4)*cw,yy=y+16+Math.floor(i/4)*30;
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...PC.mut);doc.text(l.toUpperCase(),x,yy);
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(...PC.ink);doc.text(fit(doc,val,cw-14),x,yy+12)});
+  return y+h+18}
+function kpiRow(doc,W,y,items,cols){
+  const g=8,cw=(W-72-g*(cols-1))/cols,h=50;
+  items.forEach(([l,v,w],i)=>{const x=36+(i%cols)*(cw+g),yy=y+Math.floor(i/cols)*(h+g);
+    doc.setFillColor(...PC.bg);doc.setDrawColor(...PC.line);doc.setLineWidth(.6);doc.roundedRect(x,yy,cw,h,6,6,'FD');
+    doc.setFillColor(...(w?PC.Alta:PC.ac));doc.rect(x,yy+9,3,h-18,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...(w?PC.Alta:PC.ink));doc.text(pt(String(v)),x+12,yy+28);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...PC.mut);doc.text(fit(doc,l,cw-16),x+12,yy+42)});
+  return y+Math.ceil(items.length/cols)*(h+g)+10}
+function hbars(doc,x,y,w,items,color){
+  if(!items.length){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...PC.mut);doc.text('Sin datos',x,y+8);return y+18}
+  const mx=Math.max(1,...items.map(i=>i[1])),lw=w*.4,bw=w-lw-28;
+  items.forEach(([l,v,c],i)=>{const yy=y+i*18;
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...PC.ink);doc.text(fit(doc,l,lw-6),x,yy+8);
+    doc.setFillColor(...PC.bg);doc.roundedRect(x+lw,yy,bw,10,5,5,'F');
+    if(v>0){doc.setFillColor(...(c||color));doc.roundedRect(x+lw,yy,Math.max(10,bw*v/mx),10,5,5,'F')}
+    doc.setFont('helvetica','bold');doc.setTextColor(...PC.ink);doc.text(String(v),x+lw+bw+6,yy+8)});
+  return y+items.length*18}
+const top7=m=>Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,7);
+
+/* PDF 1: listado de incidentes con los filtros activos (usuario y administrador) */
+function pdfIncidentes(){
+  const R=rows().sort((a,b)=>b.creado-a.creado);
+  if(!R.length){toast('No hay incidentes con los filtros actuales');return}
+  const pg=pdfNew('landscape',isA()?'Reporte de incidentes':'Mis incidentes','Listado según los filtros aplicados · '+R.length+(R.length===1?' registro':' registros'));
+  const doc=pg.doc,W=pg.W;let y=filterGrid(doc,W,pg.y);
+  const cl=R.filter(t=>t.status==='Cerrado').length,fs=R.filter(t=>vencido(t)||fuera(t)).length,sv=s=>R.filter(t=>t.severity===s).length;
+  y=kpiRow(doc,W,y,[['Total',R.length],['En proceso',R.length-cl],['Cerrados',cl],['Fuera de SLA',fs,fs>0],['Severidad Alta',sv('Alta')],['Severidad Media',sv('Media')],['Severidad Baja',sv('Baja')]],7);
+  secT(doc,36,y+4,'Detalle de incidentes');
+  doc.autoTable({startY:y+14,margin:{left:36,right:36,top:48,bottom:44},theme:'grid',rowPageBreak:'avoid',
+    head:[['Folio','Creado','Sistema','Severidad','Estado','Reportó','Atiende','SLA','Tiempo','Descripción']],
+    body:R.map(t=>[t.folio,fmtF(t.creado),t.system,t.severity,t.status,t.creadoPorNombre||'Sin registro',t.asignadoNombre||'Sin asignar',slaTxt(t),dur(t.cerrado?t.cerrado-t.creado:Date.now()-t.creado),t.description+((t.adjuntos||[]).length?'\n[Adjuntos: '+t.adjuntos.length+']':'')].map(pt)),
+    styles:{font:'helvetica',fontSize:7.5,cellPadding:3.5,textColor:PC.ink,lineColor:PC.line,lineWidth:.4,valign:'top',overflow:'linebreak'},
+    headStyles:{fillColor:PC.ac,textColor:255,fontStyle:'bold',halign:'left'},
+    alternateRowStyles:{fillColor:[247,250,251]},
+    columnStyles:{0:{cellWidth:52,fontStyle:'bold'},1:{cellWidth:70},2:{cellWidth:70},3:{cellWidth:46},4:{cellWidth:46},5:{cellWidth:72},6:{cellWidth:72},7:{cellWidth:54},8:{cellWidth:44}},
+    didParseCell:d=>{if(d.section!=='body')return;const v=d.cell.raw;
+      if(d.column.index===3&&PC[v]){d.cell.styles.textColor=PC[v];d.cell.styles.fontStyle='bold'}
+      if(d.column.index===4)d.cell.styles.textColor=v==='Cerrado'?PC.Baja:PC.ac;
+      if(d.column.index===7){if(v==='Fuera de SLA'||v==='Vencido'){d.cell.styles.textColor=PC.Alta;d.cell.styles.fontStyle='bold'}else if(v==='Cumplido')d.cell.styles.textColor=PC.Baja}}});
+  pdfFinish(doc,'incidentes_dermavan_'+hoy()+'.pdf');toast('PDF generado')}
+
+/* PDF 2: reporte del Centro de Control (solo administrador) */
+function pdfControl(){
+  if(!isA())return;
+  const R=rows(),pg=pdfNew('portrait','Reporte del Centro de Control','Indicadores operativos · '+R.length+(R.length===1?' incidente':' incidentes')+' en el periodo filtrado');
+  const doc=pg.doc,W=pg.W,H=pg.H;let y=filterGrid(doc,W,pg.y);
+  const ensure=h=>{if(y+h>H-48){doc.addPage();y=60}};
+  const cl=R.filter(t=>t.status==='Cerrado'),pr=R.filter(t=>t.status!=='Cerrado'),ven=data.filter(vencido).length,sa=data.filter(t=>t.status!=='Cerrado'&&!t.asignadoA).length;
+  const mt=cl.length?dur(cl.reduce((a,t)=>a+t.cerrado-t.creado,0)/cl.length):'—',cum=cl.length?Math.round(cl.filter(t=>!fuera(t)).length/cl.length*100)+'%':'—';
+  y=kpiRow(doc,W,y,[['Total',R.length],['En proceso',pr.length],['Cerrados',cl.length],['Sin asignar',sa,sa>0],['Fuera de SLA',ven,ven>0],['Cumplimiento SLA',cum],['Resolución media',mt]],4);
+  doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(...PC.mut);
+  doc.text('«Sin asignar» y «Fuera de SLA» consideran todos los incidentes abiertos, sin importar los filtros.',36,y);y+=22;
+
+  ensure(90);secT(doc,36,y,'Distribución por severidad');y+=14;
+  y=hbars(doc,36,y,W-72,['Alta','Media','Baja'].map(s=>{const n=R.filter(t=>t.severity===s).length;return[s+' ('+(R.length?Math.round(n/R.length*100):0)+'%)',n,PC[s]]}),PC.ac)+20;
+
+  const cw=(W-72-24)/2,A=top7(count(R,t=>t.system)),B=top7(count(pr,t=>t.asignadoNombre||'Sin asignar'));
+  ensure(30+Math.max(A.length,B.length,1)*18);
+  secT(doc,36,y,'Incidentes por sistema');secT(doc,36+cw+24,y,'Carga de atención (abiertos)');
+  const ya=hbars(doc,36,y+14,cw,A,PC.ac),yb=hbars(doc,36+cw+24,y+14,cw,B,PC.ac);y=Math.max(ya,yb)+20;
+
+  ensure(150);secT(doc,36,y,'Actividad de los últimos 14 días');y+=16;
+  const N=14,D=864e5,t0=new Date().setHours(0,0,0,0)-(N-1)*D,c=Array(N).fill(0),k=Array(N).fill(0);
+  R.forEach(t=>{const i=Math.floor((t.creado-t0)/D);if(i>=0&&i<N)c[i]++;if(t.cerrado){const j=Math.floor((t.cerrado-t0)/D);if(j>=0&&j<N)k[j]++}});
+  const mx=Math.max(1,...c,...k),gw=(W-72)/N,bw=gw*.32,base=y+74,chH=62;
+  doc.setDrawColor(...PC.line);doc.setLineWidth(.6);doc.line(36,base,W-36,base);
+  for(let i=0;i<N;i++){const x=36+i*gw+gw*.15;
+    [[c[i],PC.ac,0],[k[i],PC.Baja,bw+2]].forEach(([v,col,off])=>{const bh=v/mx*chH;
+      if(v>0){doc.setFillColor(...col);doc.rect(x+off,base-bh,bw,bh,'F');doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...PC.ink);doc.text(String(v),x+off+bw/2,base-bh-2,{align:'center'})}});
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...PC.mut);doc.text(String(new Date(t0+i*D).getDate()),x+bw+1,base+10,{align:'center'})}
+  y=base+24;
+  doc.setFillColor(...PC.ac);doc.rect(36,y-7,8,8,'F');doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...PC.ink);doc.text('Creados',48,y);
+  doc.setFillColor(...PC.Baja);doc.rect(100,y-7,8,8,'F');doc.text('Cerrados',112,y);y+=26;
+
+  ensure(80);secT(doc,36,y,'Cola de atención · abiertos más urgentes');y+=10;
+  const Q=data.filter(t=>t.status!=='Cerrado').sort((a,b)=>vencido(b)-vencido(a)||RANK[a.severity]-RANK[b.severity]||a.creado-b.creado).slice(0,8);
+  if(!Q.length){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...PC.mut);doc.text('Todo al día.',36,y+14)}
+  else doc.autoTable({startY:y,margin:{left:36,right:36,top:48,bottom:44},theme:'grid',rowPageBreak:'avoid',
+    head:[['Folio','Severidad','Sistema','Reportó','Tiempo de SLA','Atiende']],
+    body:Q.map(t=>{const left=SLA[t.severity]*36e5-(Date.now()-t.creado);return[t.folio,t.severity,t.system,t.creadoPorNombre||'Sin registro',left<0?'Vencido hace '+dur(-left):'Quedan '+dur(left),t.asignadoNombre||'Sin asignar'].map(pt)}),
+    styles:{font:'helvetica',fontSize:8,cellPadding:4,textColor:PC.ink,lineColor:PC.line,lineWidth:.4,valign:'middle'},
+    headStyles:{fillColor:PC.ac,textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[247,250,251]},
+    columnStyles:{0:{fontStyle:'bold',cellWidth:56},1:{cellWidth:52}},
+    didParseCell:d=>{if(d.section!=='body')return;const v=d.cell.raw;
+      if(d.column.index===1&&PC[v]){d.cell.styles.textColor=PC[v];d.cell.styles.fontStyle='bold'}
+      if(d.column.index===4&&/^Vencido/.test(v)){d.cell.styles.textColor=PC.Alta;d.cell.styles.fontStyle='bold'}}});
+  pdfFinish(doc,'reporte_centro_control_'+hoy()+'.pdf');toast('PDF generado')}
+$('#pdf').onclick=()=>run($('#pdf'),async()=>{pdfIncidentes()});
+$('#pdfC').onclick=()=>run($('#pdfC'),async()=>{pdfControl()});
 
 /* ---------- Excel ---------- */
 $('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'',Adjuntos:(t.adjuntos||[]).map(a=>a.name).join(', ')}));
