@@ -89,6 +89,13 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 .acts{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,2rem);background:var(--ink);color:var(--bg);padding:.7rem 1.1rem;border-radius:999px;opacity:0;pointer-events:none;transition:.3s;z-index:30;max-width:92vw}.toast.on{opacity:1;transform:translate(-50%,0)}
 .errbox{color:var(--Alta);font-weight:700;font-size:.9rem;margin:.6rem 0 0;padding:.55rem .8rem;border:1px solid var(--Alta);border-radius:10px;background:color-mix(in srgb,var(--Alta) 10%,transparent)}
+/* adjuntos */
+.fl{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.chip{display:inline-flex;align-items:center;gap:.4rem;max-width:100%;padding:.25rem .3rem .25rem .7rem;border:1px solid var(--line);background:var(--s2);border-radius:999px;font-size:.82rem}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}.chip small{color:var(--mut)}
+.chip button{border:0;background:none;cursor:pointer;color:var(--Alta);font-weight:700;padding:0 .4rem}
+.fl .btn.sm{max-width:100%}.fl .btn.sm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+input[type=file]{padding:.45rem .6rem}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -172,6 +179,9 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
   <label for="sys">Sistema</label><select id="sys"></select>
   <label>Severidad</label><div class="seg" id="sv"></div>
   <label for="dsc">Descripción</label><textarea id="dsc" placeholder="¿Qué pasó, desde cuándo y a quién afecta?"></textarea>
+  <label for="fn">Adjuntos (opcional · máx. 5 archivos de 3 MB)</label>
+  <input type="file" id="fn" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip">
+  <div class="fl" id="fnL"></div>
   <p class="errbox" id="crErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cancelar</button><button class="btn pr" id="cr">Crear incidente</button></div></div></dialog>
 <dialog id="dT"><div class="dlg" id="tb"></div></dialog>
@@ -184,14 +194,16 @@ const API_URL='https://script.google.com/macros/s/AKfycbxN3mxyfj-ldkgNQog2669QEg
 
 const SIS=['Biométrico','BlackList','CallCenter','Correo Electrónico','Cotizador','CRM Harmony','DermaLab','Enlaces de RED','Gestión de Licencias','Impresoras','Ipad','Iphone','Laptop','Páginas WEB','POPL','Red / Infraestructura','SAP','Servidores Cloud MOODLE','Servidores Cloud SAP'];
 const SLA={Alta:4,Media:24,Baja:72},RANK={Alta:0,Media:1,Baja:2};
+const MAXB=3*1024*1024,MAXN=5,OKX=/\.(pdf|docx?|xlsx?|csv|txt|png|jpe?g|gif|webp|zip)$/i;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
 const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFixed(1)+' h':(h/24).toFixed(1)+' d'};
+const kb=n=>n<1048576?Math.max(1,Math.round(n/1024))+' KB':(n/1048576).toFixed(1)+' MB';
 const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
-let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
+let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto',PF=[],PU=[];
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
 const isA=()=>P?.rol==='admin';
 
@@ -229,6 +241,43 @@ const run=async(btn,f,errEl)=>{
   }
   finally{if(btn)btn.disabled=false}
 };
+
+/* ---------- Archivos adjuntos ---------- */
+const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>no(new Error('No se pudo leer "'+f.name+'"'));r.readAsDataURL(f)});
+async function shrink(f){ // comprime fotos grandes (jpg/png/webp > 800 KB) a máx. 1600 px
+  if(!/^image\/(jpeg|png|webp)$/.test(f.type)||f.size<=8e5)return f;
+  try{
+    const bm=await createImageBitmap(f),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');
+    c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bm,0,0,c.width,c.height);
+    const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));
+    if(b&&b.size<f.size)return new File([b],f.name.replace(/\.\w+$/,'')+'.jpg',{type:'image/jpeg'});
+  }catch(e){console.warn('[shrink]',e)}
+  return f}
+async function pick(input,arr,existing){
+  const errs=[];
+  for(const f0 of [...input.files]){
+    if(arr.length+existing>=MAXN){errs.push('Máximo '+MAXN+' archivos por incidente');break}
+    if(!OKX.test(f0.name)){errs.push('"'+f0.name+'": tipo no permitido');continue}
+    const f=await shrink(f0);
+    if(f.size>MAXB){errs.push('"'+f0.name+'" supera 3 MB ('+kb(f0.size)+')');continue}
+    if(!f.size){errs.push('"'+f0.name+'" está vacío');continue}
+    if(arr.some(a=>a.name===f.name&&a.size===f.size))continue;
+    arr.push({name:f.name,type:f.type||'application/octet-stream',size:f.size,data:await readB64(f)});
+  }
+  input.value='';
+  if(errs.length)toast(errs.join(' · '))}
+function drawF(el,arr){
+  el.innerHTML=arr.map((f,i)=>`<span class="chip"><span title="${esc(f.name)}">📎 ${esc(f.name)}</span><small>${kb(f.size)}</small><button type="button" data-rm="${i}" aria-label="Quitar ${esc(f.name)}">✕</button></span>`).join('')}
+const payloadF=a=>a.map(({name,type,data})=>({name,type,data}));
+async function download(id,fid,btn){
+  if(btn)btn.disabled=true;
+  try{
+    const j=await api('file',{id,fid});
+    const bin=atob(j.data),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([u8],{type:j.type||'application/octet-stream'})),a=document.createElement('a');
+    a.href=url;a.download=j.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }finally{if(btn)btn.disabled=false}}
 
 /* ---------- Acceso ---------- */
 $('#lsv').onclick=()=>{$('#login').hidden=true;$('#conn').hidden=false;$('#cu').value=API};
@@ -291,13 +340,13 @@ const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
 
 /* ---------- Render ---------- */
 function card(t){
+  const na=(t.adjuntos||[]).length;
   return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
-  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}</div></div>
+  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${na?`<span>· 📎 ${na}</span>`:''}${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}</div></div>
   <div class="st"><span class="tag ${t.status==='Cerrado'?'t-c':'t-p'}">${t.status}</span>${vencido(t)?'<span class="tag t-v">Fuera de SLA</span>':''}${t.status!=='Cerrado'&&!t.asignadoA&&isA()?'<span class="tag t-m">Sin asignar</span>':''}</div></button>`}
 function render(){
   if(!P||$('#app').hidden)return;const R=rows();
   if(view==='inc'){
-    // Ordenar los incidentes del más reciente al primero para el admin.
     const L = isA() ? [...R].sort((a,b)=>b.creado-a.creado) : R;
     $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${data.length?'Ningún incidente coincide con los filtros.':'Aún no hay incidentes.'}</div>`;
   }
@@ -307,12 +356,15 @@ function render(){
     $('#kpis').innerHTML=[['Total',R.length,''],['En proceso',pr.length,''],['Cerrados',cl.length,''],['Sin asignar',sa,sa?'warn':''],['Fuera de SLA',ven,ven?'warn':''],['Cumplimiento SLA',cum,''],['Resolución media',mt,'']].map(([l,v,c])=>`<div class="card kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
     const Q=data.filter(t=>t.status!=='Cerrado').sort((a,b)=>vencido(b)-vencido(a)||RANK[a.severity]-RANK[b.severity]||a.creado-b.creado).slice(0,8);
     $('#queue').innerHTML=Q.length?Q.map(t=>{const left=SLA[t.severity]*36e5-(Date.now()-t.creado);return `<div class="qi ${t.severity}"><div><b>${esc(t.folio)}</b><small>${t.severity}</small></div>
-      <div><b style="font-family:var(--body);font-weight:700">${esc(t.system)}</b> · ${esc(t.creadoPorNombre||'Sin registro')}<small>${esc(t.description.slice(0,90))} · ${left<0?'<span style="color:var(--Alta);font-weight:700">vencido hace '+dur(-left)+'</span>':'quedan '+dur(left)} · ${t.asignadoNombre?'Atiende: '+esc(t.asignadoNombre):'Sin asignar'}</small></div>
+      <div><b style="font-family:var(--body);font-weight:700">${esc(t.system)}</b> · ${esc(t.creadoPorNombre||'Sin registro')}<small>${esc(t.description.slice(0,90))} · ${left<0?'<span style="color:var(--Alta);font-weight:700">vencido hace '+dur(-left)+'</span>':'quedan '+dur(left)} · ${t.asignadoNombre?'Atiende: '+esc(t.asignadoNombre):'Sin asignar'}${(t.adjuntos||[]).length?' · 📎 '+t.adjuntos.length:''}</small></div>
       <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. 🎉</div>';
     $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
 }
 const upd=async(id,p,close)=>{await api('upd',{id,...p});try{await refresh()}catch(e){console.error('[upd] refresh falló:',e)}toast('Guardado');close?$('#dT').close():openT(id)};
-document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true));return}
+document.addEventListener('click',e=>{
+  const k=e.target.closest('[data-take]');if(k){e.stopPropagation();k.disabled=true;run(null,()=>upd(k.dataset.take,{asignadoA:P.uid},true));return}
+  const dl=e.target.closest('[data-dl]');if(dl){const[i,f]=dl.dataset.dl.split('|');run(null,()=>download(i,f,dl));return}
+  const rm=e.target.closest('[data-rm]');if(rm){const inN=!!rm.closest('#dN'),arr=inN?PF:PU;arr.splice(+rm.dataset.rm,1);drawF(inN?$('#fnL'):$('#fuL'),arr);return}
   const b=e.target.closest('[data-t]');if(b)openT(b.dataset.t);
   if(e.target.closest('[data-close]'))e.target.closest('dialog').close()});
 
@@ -320,21 +372,20 @@ document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if
 const drawSev=()=>$('#sv').innerHTML=['Alta','Media','Baja'].map(s=>`<button class="${s}" aria-pressed="${s===sev}" data-s="${s}">${s}</button>`).join('');
 $('#sv').onclick=e=>{const b=e.target.closest('[data-s]');if(b){sev=b.dataset.s;drawSev()}};
 $('#new').onclick=()=>{
-  drawSev();
+  drawSev();PF=[];drawF($('#fnL'),PF);
   $('#crErr').hidden=true;$('#crErr').textContent='';
   $('#dN').showModal();
 };
+$('#fn').onchange=()=>run(null,async()=>{await pick($('#fn'),PF,0);drawF($('#fnL'),PF)});
 
 $('#cr').onclick=()=>{
   const s=$('#sys').value,d=$('#dsc').value.trim();
   if(!s||!d){toast('Completa sistema y descripción');return}
-  
   run($('#cr'), async () => {
     const payload = { system: s, severity: sev, description: d };
-    // Llamada directa, sin trampas de "respaldo" ni cambios de sistema
+    if(PF.length){payload.files=payloadF(PF);toast('Subiendo archivos…')}
     const j = await api('add', payload);
-
-    $('#dsc').value='';$('#sys').value='';$('#crErr').hidden=true;
+    $('#dsc').value='';$('#sys').value='';PF=[];drawF($('#fnL'),PF);$('#crErr').hidden=true;
     $('#dN').close();
     toast('Incidente '+(j.folio||'')+' creado');
     try{await refresh()}catch(e){console.error('[create] refresh falló:',e)}
@@ -343,28 +394,33 @@ $('#cr').onclick=()=>{
 
 /* ---------- Detalle / atención ---------- */
 function openT(id){
-  const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
+  const t=data.find(x=>x.id===id);if(!t)return;cur=id;PU=[];const cerr=t.status==='Cerrado',A=isA(),adj=t.adjuntos||[];
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
-  
   $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
   <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
   <p class="sub">${cerr?'Resuelto en '+dur(t.cerrado-t.creado)+(fuera(t)?' (fuera de SLA)':' (dentro de SLA)'):'Abierto hace '+dur(Date.now()-t.creado)+' · objetivo '+SLA[t.severity]+' h'}</p>
   <label for="ed">Descripción</label><textarea id="ed" style="min-height:70px">${esc(t.description)}</textarea>
   ${A?`<label for="as">Asignado a</label><select id="as"><option value="">Sin asignar</option>${ops}</select>`:''}
+  <label>Archivos adjuntos (${adj.length}/${MAXN})</label>
+  <div class="fl">${adj.length?adj.map(a=>`<button type="button" class="btn sm" data-dl="${esc(t.id)}|${esc(a.fid)}" title="Descargar ${esc(a.name)}">📎 <span>${esc(a.name)}</span> <small>${kb(a.size||0)}</small></button>`).join(''):'<span class="sub">Sin archivos adjuntos.</span>'}</div>
+  ${adj.length<MAXN?`<input type="file" id="fu" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip"><div class="fl" id="fuL"></div><p class="sub">Se enviarán al pulsar «Guardar». Máx. 3 MB por archivo.</p>`:''}
   <ul class="log">${t.bit.map(l=>`<li><b>${esc(l.por)}</b> ${esc(l.text)}<small>${fmt(l.at)}</small></li>`).join('')}</ul>
   <label for="nc">Comentario</label><textarea id="nc" style="min-height:56px"></textarea>
   <p class="errbox" id="tbErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cerrar ventana</button><button class="btn" id="sv2">Guardar</button>${A?`<button class="btn pr" id="stt">${cerr?'Reabrir':'Cerrar incidente'}</button>`:''}</div>`;
-  
+
+  if($('#fu'))$('#fu').onchange=()=>run(null,async()=>{await pick($('#fu'),PU,adj.length);drawF($('#fuL'),PU)});
+
   $('#sv2').onclick=()=>{run($('#sv2'),async()=>{
     const p={},d=$('#ed').value.trim(),c=$('#nc').value.trim();
     if(d&&d!==t.description)p.description=d;
     if(c)p.comentario=c;
     if(A&&($('#as').value||'')!==(t.asignadoA||''))p.asignadoA=$('#as').value;
+    if(PU.length){p.files=payloadF(PU);toast('Subiendo archivos…')}
     if(!Object.keys(p).length){toast('No hay cambios');return}
     await upd(t.id,p);
   },$('#tbErr'))};
-  
+
   if(A)$('#stt').onclick=()=>run($('#stt'),()=>upd(t.id,{status:cerr?'En proceso':'Cerrado'},true),$('#tbErr'));
   if(!$('#dT').open)$('#dT').showModal()}
 
@@ -387,10 +443,11 @@ $('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$(
   run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
 
 /* ---------- Excel ---------- */
-$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):''}));
+$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'',Adjuntos:(t.adjuntos||[]).map(a=>a.name).join(', ')}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R),'Incidentes');XLSX.writeFile(wb,'incidentes_dermavan.xlsx')};
 
 init();
 </script>
 </body>
 </html>
+
