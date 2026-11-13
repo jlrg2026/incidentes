@@ -174,7 +174,8 @@ input[type=file]{padding:.45rem .6rem}
       <label for="up">Contraseña temporal</label><input id="up" type="text" placeholder="Mínimo 6 caracteres">
       <label for="ur">Rol</label><select id="ur"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select>
       <button class="btn pr" id="ua" style="width:100%;justify-content:center;margin-top:1rem">Dar de alta</button></div>
-    <div class="card tw"><h2 id="uh">Usuarios</h2><table><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Incidentes</th><th></th></tr></thead><tbody id="ut"></tbody></table></div>
+    <div class="card tw"><h2 id="uh">Usuarios</h2><table><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Incidentes</th><th></th></tr></thead><tbody id="ut"></tbody></table>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem"><button class="btn pr" id="pdfU" title="Descargar reporte PDF de usuarios">👥 Reporte PDF</button></div></div>
   </div>
 </main>
 </div>
@@ -578,6 +579,30 @@ function pdfControl(){
   pdfFinish(doc,'reporte_centro_control_'+hoy()+'.pdf');toast('PDF generado')}
 $('#pdf').onclick=()=>run($('#pdf'),async()=>{pdfIncidentes()});
 $('#pdfC').onclick=()=>run($('#pdfC'),async()=>{pdfControl()});
+
+/* PDF 3: reporte de usuarios (solo administrador) */
+function pdfUsuarios(){
+  if(!isA())return;
+  if(!users.length){toast('No hay usuarios para reportar');return}
+  const act=users.filter(u=>u.activo).length,adm=users.filter(u=>u.activo&&u.rol==='admin').length;
+  const pg=pdfNew('landscape','Reporte de usuarios','Accesos y actividad · '+users.length+(users.length===1?' usuario':' usuarios')+' registrados');
+  const doc=pg.doc,W=pg.W;let y=pg.y;
+  y=kpiRow(doc,W,y,[['Usuarios registrados',users.length],['Activos',act],['Dados de baja',users.length-act,users.length-act>0],['Administradores activos',adm]],4);
+  const open=t=>t.status!=='Cerrado',L=[...users].sort((a,b)=>(b.activo-a.activo)||a.nombre.localeCompare(b.nombre));
+  secT(doc,36,y+4,'Detalle de usuarios');
+  doc.autoTable({startY:y+14,margin:{left:36,right:36,top:48,bottom:44},theme:'grid',rowPageBreak:'avoid',
+    head:[['Usuario','Correo','Rol','Estado','Alta','Incidentes reportados','Reportados abiertos','Atendiendo (abiertos)']],
+    body:L.map(u=>[u.nombre,u.email,u.rol==='admin'?'Administrador':'Usuario',u.activo?'Activo':'Baja',u.creado?new Date(u.creado).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}):'—',
+      String(data.filter(t=>t.creadoPor===u.uid).length),String(data.filter(t=>t.creadoPor===u.uid&&open(t)).length),u.rol==='admin'?String(data.filter(t=>t.asignadoA===u.uid&&open(t)).length):'—'].map(pt)),
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:5,textColor:PC.ink,lineColor:PC.line,lineWidth:.4,valign:'middle',overflow:'linebreak'},
+    headStyles:{fillColor:PC.ac,textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[247,250,251]},
+    columnStyles:{0:{fontStyle:'bold'},2:{cellWidth:78},3:{cellWidth:46},4:{cellWidth:70},5:{cellWidth:70,halign:'center'},6:{cellWidth:70,halign:'center'},7:{cellWidth:76,halign:'center'}},
+    didParseCell:d=>{if(d.section!=='body')return;const v=d.cell.raw;
+      if(d.column.index===2&&v==='Administrador'){d.cell.styles.textColor=PC.ac;d.cell.styles.fontStyle='bold'}
+      if(d.column.index===3){d.cell.styles.fontStyle='bold';d.cell.styles.textColor=v==='Activo'?PC.Baja:PC.Alta}
+      if(L[d.row.index]&&!L[d.row.index].activo&&d.column.index!==3)d.cell.styles.textColor=PC.mut}});
+  pdfFinish(doc,'usuarios_dermavan_'+hoy()+'.pdf');toast('PDF generado')}
+$('#pdfU').onclick=()=>run($('#pdfU'),async()=>{pdfUsuarios()});
 
 /* ---------- Excel ---------- */
 $('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'',Adjuntos:(t.adjuntos||[]).map(a=>a.name).join(', ')}));
