@@ -98,6 +98,14 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
 .chip button{border:0;background:none;cursor:pointer;color:var(--Alta);font-weight:700;padding:0 .4rem}
 .fl .btn.sm{max-width:100%}.fl .btn.sm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
 input[type=file]{padding:.45rem .6rem}
+/* referencia de tiempos (SLA) */
+.slab{margin-top:1rem;border:1px solid var(--line);background:var(--s2);border-radius:14px;padding:.7rem .9rem;font-size:.82rem;text-align:left}
+.slab h4{margin:0 0 .45rem;font:700 .85rem var(--head)}
+.slab ul{list-style:none;margin:0;padding:0;display:grid;gap:.3rem}
+.slab li{display:flex;align-items:center;gap:.5rem}.slab li i{width:10px;height:10px;border-radius:3px;flex:none}
+.slab li b{min-width:48px}.slab li span{color:var(--mut)}
+.slab p{margin:.5rem 0 0;color:var(--mut);font-size:.75rem}
+.slab.h{margin:0 0 1rem}.slab.h ul{display:flex;flex-wrap:wrap;gap:.4rem 1.6rem}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -155,6 +163,7 @@ input[type=file]{padding:.45rem .6rem}
     <button class="btn" id="clr">Limpiar</button>
     <button class="btn pr" id="xls">Exportar Excel</button>
   </div>
+  <div class="slab h" id="slaU" hidden></div>
 </main>
 
 <main id="v-ctl" style="padding-top:0" hidden>
@@ -306,6 +315,7 @@ async function start(){
   $('#login').hidden=true;$('#app').hidden=false;
   $('#who').innerHTML=`${av(P.nombre)}<span><b>${esc(P.nombre)}</b><br><small style="color:var(--mut)">${isA()?'Administrador':'Usuario'}</small></span>`;
   document.querySelectorAll('.adm').forEach(e=>e.hidden=!isA());
+  $('#slaU').hidden=isA();
   const tabs=isA()?[['ctl','Centro de control'],['inc','Incidentes'],['usr','Usuarios']]:[['inc','Mis incidentes']];
   $('#nav').innerHTML=tabs.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('');
   $('#fsis').innerHTML='<option value="">Todos</option>'+SIS.map(s=>`<option>${s}</option>`).join('');
@@ -342,6 +352,9 @@ function trend(R){const N=14,D=864e5,t0=new Date().setHours(0,0,0,0)-(N-1)*D,c=A
   const mx=Math.max(1,...c,...k),W=300,H=100,p=a=>a.map((v,i)=>`${i*W/(N-1)},${H-6-v/mx*(H-16)}`).join(' ');
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img"><polyline points="${p(c)}" fill="none" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/><polyline points="${p(k)}" fill="none" stroke="var(--Baja)" stroke-width="3" stroke-dasharray="5 4" stroke-linejoin="round"/></svg><div class="leg" style="grid-auto-flow:column;justify-content:start;gap:1rem"><span><i style="background:var(--ac)"></i>Creados</span><span><i style="background:var(--Baja)"></i>Cerrados</span></div>`}
 const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
+const slaH=h=>h<24?h+' h':h+' h ('+h/24+(h/24===1?' día':' días')+')';
+const slaInner=()=>`<h4>Tiempos de atención · referencia</h4><ul>${['Alta','Media','Baja'].map(s=>`<li><i style="background:${COL[s]}"></i><b>${s}</b><span>${slaH(SLA[s])}</span></li>`).join('')}</ul><p>Tiempo máximo de resolución. Si un incidente abierto lo supera, se marca como «Fuera de SLA».</p>`;
+$('#slaU').innerHTML=slaInner();
 
 /* ---------- Render ---------- */
 function card(t){
@@ -363,7 +376,7 @@ function render(){
     $('#queue').innerHTML=Q.length?Q.map(t=>{const left=SLA[t.severity]*36e5-(Date.now()-t.creado);return `<div class="qi ${t.severity}"><div><b>${esc(t.folio)}</b><small>${t.severity}</small></div>
       <div><b style="font-family:var(--body);font-weight:700">${esc(t.system)}</b> · ${esc(t.creadoPorNombre||'Sin registro')}<small>${esc(t.description.slice(0,90))} · ${left<0?'<span style="color:var(--Alta);font-weight:700">vencido hace '+dur(-left)+'</span>':'quedan '+dur(left)} · ${t.asignadoNombre?'Atiende: '+esc(t.asignadoNombre):'Sin asignar'}${(t.adjuntos||[]).length?' · 📎 '+t.adjuntos.length:''}</small></div>
       <div class="uc">${t.asignadoA?'':`<button class="btn sm pr" data-take="${t.id}">Tomar</button>`}<button class="btn sm" data-t="${t.id}">Abrir</button></div></div>`}).join(''):'<div class="empty">Todo al día. 🎉</div>';
-    $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}</div><div class="card"><h3>Sistemas</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
+    $('#dash').innerHTML=`<div class="card"><h3>Por severidad</h3>${donut(R)}<div class="slab">${slaInner()}</div></div><div class="card"><h3>Sistemas</h3>${bars(count(R,t=>t.system))}</div><div class="card"><h3>Carga</h3>${bars(count(pr,t=>t.asignadoNombre||'Sin asignar'))}</div><div class="card"><h3>Últimos 14 días</h3>${trend(R)}</div>`}
 }
 const upd=async(id,p,close)=>{await api('upd',{id,...p});try{await refresh()}catch(e){console.error('[upd] refresh falló:',e)}toast('Guardado');close?$('#dT').close():openT(id)};
 document.addEventListener('click',e=>{
