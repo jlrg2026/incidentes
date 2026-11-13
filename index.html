@@ -172,9 +172,6 @@ dialog::backdrop{background:rgba(2,10,15,.6);backdrop-filter:blur(3px)}
   <label for="sys">Sistema</label><select id="sys"></select>
   <label>Severidad</label><div class="seg" id="sv"></div>
   <label for="dsc">Descripción</label><textarea id="dsc" placeholder="¿Qué pasó, desde cuándo y a quién afecta?"></textarea>
-  <label for="att">Imagen adjunta (opcional, máx. 2 MB)</label>
-  <input type="file" id="att" accept="image/*">
-  <p class="sub" id="attInfo" hidden></p>
   <p class="errbox" id="crErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cancelar</button><button class="btn pr" id="cr">Crear incidente</button></div></div></dialog>
 <dialog id="dT"><div class="dlg" id="tb"></div></dialog>
@@ -194,8 +191,6 @@ const dur=ms=>{const h=ms/36e5;return h<1?Math.round(ms/6e4)+' min':h<48?h.toFix
 const av=n=>`<span class="av" style="background:hsl(${[...(n||'?')].reduce((a,c)=>a+c.charCodeAt(0)*7,0)%360} 55% 42%)">${esc((n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</span>`;
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.remove('on'),3000)};
 const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
-const MAX_ATT=2*1024*1024;
-const fileToB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({name:f.name,mime:f.type,size:f.size,data:r.result});r.onerror=()=>rej(new Error('No se pudo leer la imagen'));r.readAsDataURL(f)});
 let API=ls.get('inc_api')||API_URL||'',SS=null,P=null,data=[],users=[],view='inc',sev='Media',timer=null,cur=null,mode=ls.get('inc_theme')||'auto';
 try{SS=JSON.parse(ls.get('inc_s'))}catch{}
 const isA=()=>P?.rol==='admin';
@@ -296,9 +291,8 @@ const count=(R,f)=>R.reduce((m,t)=>{const k=f(t);m[k]=(m[k]||0)+1;return m},{});
 
 /* ---------- Render ---------- */
 function card(t){
-  const hasAtt = t.adjunto || t.adjuntoNombre;
   return `<button class="tk ${t.severity}" data-t="${t.id}"><div class="stub"><b>${esc(t.folio)}</b><span>${t.severity}</span></div>
-  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}${hasAtt?'<span title="Tiene imagen">🖼️</span>':''}</div></div>
+  <div class="body"><h3>${esc(t.system)}</h3><p>${esc(t.description)}</p><div class="meta">${av(t.creadoPorNombre)}<span>${esc(t.creadoPorNombre||'Sin registro')}</span><span>· ${fmt(t.creado)}</span>${t.asignadoNombre?`<span>· Atiende: <b>${esc(t.asignadoNombre)}</b></span>`:''}</div></div>
   <div class="st"><span class="tag ${t.status==='Cerrado'?'t-c':'t-p'}">${t.status}</span>${vencido(t)?'<span class="tag t-v">Fuera de SLA</span>':''}${t.status!=='Cerrado'&&!t.asignadoA&&isA()?'<span class="tag t-m">Sin asignar</span>':''}</div></button>`}
 function render(){
   if(!P||$('#app').hidden)return;const R=rows();
@@ -325,17 +319,8 @@ document.addEventListener('click',e=>{const k=e.target.closest('[data-take]');if
 /* ---------- Alta de incidente ---------- */
 const drawSev=()=>$('#sv').innerHTML=['Alta','Media','Baja'].map(s=>`<button class="${s}" aria-pressed="${s===sev}" data-s="${s}">${s}</button>`).join('');
 $('#sv').onclick=e=>{const b=e.target.closest('[data-s]');if(b){sev=b.dataset.s;drawSev()}};
-$('#att').onchange=()=>{
-  const f=$('#att').files[0],info=$('#attInfo');
-  if(!f){info.hidden=true;return}
-  if(!f.type.startsWith('image/')){toast('Solo se permiten imágenes');$('#att').value='';info.hidden=true;return}
-  if(f.size>MAX_ATT){toast('La imagen supera 2 MB');$('#att').value='';info.hidden=true;return}
-  info.hidden=false;info.textContent=f.name+' · '+(f.size/1024).toFixed(1)+' KB';
-};
 $('#new').onclick=()=>{
   drawSev();
-  $('#att').value='';
-  $('#attInfo').hidden=true;
   $('#crErr').hidden=true;$('#crErr').textContent='';
   $('#dN').showModal();
 };
@@ -346,63 +331,28 @@ $('#cr').onclick=()=>{
   
   run($('#cr'), async () => {
     const payload = { system: s, severity: sev, description: d };
-    const f = $('#att').files[0];
-    let hasAtt = false;
-    
-    if (f) {
-      if (!f.type.startsWith('image/')) throw new Error('Solo se permiten imágenes');
-      if (f.size > MAX_ATT) throw new Error('La imagen supera 2 MB');
-      const b64 = await fileToB64(f);
-      payload.adjunto = b64.data;
-      payload.adjuntoNombre = b64.name;
-      hasAtt = true;
-    }
-
     let j;
     try {
       j = await api('add', payload);
     } catch(e) {
       let errorMsg = e.message;
-      
-      // RESCATE 1: Si falla y tiene imagen, intentar SIN imagen
-      if (hasAtt) {
-        const reintentar = confirm("El servidor rechazó el incidente con la imagen.\n¿Deseas crear el incidente SIN la imagen?");
-        if (reintentar) {
-          delete payload.adjunto;
-          delete payload.adjuntoNombre;
-          hasAtt = false;
-          try {
-            j = await api('add', payload);
-          } catch(e2) {
-             errorMsg = e2.message;
-          }
-        } else {
-          throw e;
+      const problemSystems = ['SAP', 'Cotizador', 'CRM Harmony', 'DermaLab'];
+      if (problemSystems.includes(s) || errorMsg.includes('Datos incompletos')) {
+        const fallbackSystem = SIS[0]; // 'Biométrico' (el que sí funciona)
+        const fallbackDesc = '[Sistema original: ' + s + '] ' + d;
+        const fallbackPayload = { system: fallbackSystem, severity: sev, description: fallbackDesc };
+        try {
+          j = await api('add', fallbackPayload);
+          alert('Nota: El servidor de Google Sheets rechazó el sistema "' + s + '".\n\nEl incidente se guardó exitosamente usando la opción "' + fallbackSystem + '". Se anotó "' + s + '" al inicio de la descripción para tu control.');
+        } catch(e3) {
+          throw e3;
         }
-      }
-      
-      // RESCATE 2: Si sigue fallando por el sistema (Datos incompletos)
-      if (!j) {
-        const problemSystems = ['SAP', 'Cotizador', 'CRM Harmony', 'DermaLab'];
-        if (problemSystems.includes(s) || errorMsg.includes('Datos incompletos')) {
-          
-          const fallbackSystem = SIS[0]; // 'Biométrico' (el que sí funciona)
-          const fallbackDesc = '[Sistema original: ' + s + '] ' + d;
-          const fallbackPayload = { system: fallbackSystem, severity: sev, description: fallbackDesc };
-          
-          try {
-             j = await api('add', fallbackPayload);
-             alert('Nota: El servidor de Google Sheets rechazó el sistema "' + s + '".\n\nEl incidente se guardó exitosamente usando la opción "' + fallbackSystem + '". Se anotó "' + s + '" al inicio de la descripción para tu control.');
-          } catch(e3) {
-             throw e3;
-          }
-        } else {
-          throw e; // Si el error es otro, se muestra.
-        }
+      } else {
+        throw e;
       }
     }
 
-    $('#dsc').value='';$('#sys').value='';$('#att').value='';$('#attInfo').hidden=true;$('#crErr').hidden=true;
+    $('#dsc').value='';$('#sys').value='';$('#crErr').hidden=true;
     $('#dN').close();
     toast('Incidente '+(j.folio||'')+' creado');
     try{await refresh()}catch(e){console.error('[create] refresh falló:',e)}
@@ -414,58 +364,21 @@ function openT(id){
   const t=data.find(x=>x.id===id);if(!t)return;cur=id;const cerr=t.status==='Cerrado',A=isA();
   const ops=users.filter(u=>u.rol==='admin'&&u.activo).map(u=>`<option value="${u.uid}" ${u.uid===t.asignadoA?'selected':''}>${esc(u.nombre)}</option>`).join('');
   
-  let attHtml = '';
-  if (t.adjunto || t.adjuntoNombre) {
-    if (typeof t.adjunto === 'string' && (t.adjunto.startsWith('data:image') || t.adjunto.startsWith('http'))) {
-      attHtml = `<div style="margin-top:1rem;">
-        <p class="sub">🖼️ Imagen adjunta: <b>${esc(t.adjuntoNombre||'Ver imagen')}</b></p>
-        <img src="${t.adjunto}" style="max-width:100%; border-radius:8px; margin-bottom:10px; border:1px solid var(--line);" />
-      </div>`;
-    } else {
-      attHtml = `<p class="sub" style="margin-top:1rem;">🖼️ Adjunto: <b>${esc(t.adjuntoNombre || 'Archivo')}</b></p>`;
-    }
-  }
-
   $('#tb').innerHTML=`<h2>${esc(t.folio)} · ${esc(t.system)}</h2>
   <div class="meta">${av(t.creadoPorNombre)}<span>Reportó <b>${esc(t.creadoPorNombre||'Sin registro')}</b></span><span>· ${t.severity}</span><span>· ${fmt(t.creado)}</span><span class="tag ${cerr?'t-c':'t-p'}">${t.status}</span></div>
   <p class="sub">${cerr?'Resuelto en '+dur(t.cerrado-t.creado)+(fuera(t)?' (fuera de SLA)':' (dentro de SLA)'):'Abierto hace '+dur(Date.now()-t.creado)+' · objetivo '+SLA[t.severity]+' h'}</p>
   <label for="ed">Descripción</label><textarea id="ed" style="min-height:70px">${esc(t.description)}</textarea>
   ${A?`<label for="as">Asignado a</label><select id="as"><option value="">Sin asignar</option>${ops}</select>`:''}
-  
-  ${attHtml}
-  
   <ul class="log">${t.bit.map(l=>`<li><b>${esc(l.por)}</b> ${esc(l.text)}<small>${fmt(l.at)}</small></li>`).join('')}</ul>
   <label for="nc">Comentario</label><textarea id="nc" style="min-height:56px"></textarea>
-  
-  <label for="attEdit">Agregar imagen (opcional, máx. 2 MB)</label>
-  <input type="file" id="attEdit" accept="image/*">
-  <p class="sub" id="attEditInfo" hidden></p>
-  
   <p class="errbox" id="tbErr" hidden></p>
   <div class="acts"><button class="btn" data-close>Cerrar ventana</button><button class="btn" id="sv2">Guardar</button>${A?`<button class="btn pr" id="stt">${cerr?'Reabrir':'Cerrar incidente'}</button>`:''}</div>`;
-  
-  $('#attEdit').onchange=()=>{
-    const f=$('#attEdit').files[0],info=$('#attEditInfo');
-    if(!f){info.hidden=true;return}
-    if(!f.type.startsWith('image/')){toast('Solo se permiten imágenes');$('#attEdit').value='';info.hidden=true;return}
-    if(f.size>MAX_ATT){toast('La imagen supera 2 MB');$('#attEdit').value='';info.hidden=true;return}
-    info.hidden=false;info.textContent=f.name+' · '+(f.size/1024).toFixed(1)+' KB';
-  };
   
   $('#sv2').onclick=()=>{run($('#sv2'),async()=>{
     const p={},d=$('#ed').value.trim(),c=$('#nc').value.trim();
     if(d&&d!==t.description)p.description=d;
     if(c)p.comentario=c;
     if(A&&($('#as').value||'')!==(t.asignadoA||''))p.asignadoA=$('#as').value;
-    
-    const f=$('#attEdit').files[0];
-    if(f){
-      if(!f.type.startsWith('image/')) throw new Error('Solo se permiten imágenes');
-      if(f.size>MAX_ATT) throw new Error('La imagen supera 2 MB');
-      const b64 = await fileToB64(f);
-      p.adjunto = b64.data;
-      p.adjuntoNombre = b64.name;
-    }
     if(!Object.keys(p).length){toast('No hay cambios');return}
     await upd(t.id,p);
   },$('#tbErr'))};
@@ -492,7 +405,7 @@ $('#ua').onclick=()=>{const n=$('#un').value.trim(),e=$('#ue').value.trim(),p=$(
   run($('#ua'),async()=>{await api('uadd',{nombre:n,email:e,pass:p,rol:r});['un','ue','up'].forEach(i=>$('#'+i).value='');await refresh();toast('Usuario dado de alta: '+n)})};
 
 /* ---------- Excel ---------- */
-$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):'','Imagen':t.adjuntoNombre||(t.adjunto?'Sí':'')}));
+$('#xls').onclick=()=>{const R=rows().map(t=>({Folio:t.folio,Sistema:t.system,Severidad:t.severity,Descripción:t.description,Estado:t.status,Reportó:t.creadoPorNombre||'',Atiende:t.asignadoNombre||'',Creado:new Date(t.creado).toLocaleString('es-MX'),Cerrado:t.cerrado?new Date(t.cerrado).toLocaleString('es-MX'):'','Horas de resolución':t.cerrado?+((t.cerrado-t.creado)/36e5).toFixed(2):'','Dentro de SLA':t.cerrado?(fuera(t)?'No':'Sí'):''}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R),'Incidentes');XLSX.writeFile(wb,'incidentes_dermavan.xlsx')};
 
 init();
